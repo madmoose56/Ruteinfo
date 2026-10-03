@@ -75,6 +75,10 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .hm span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#0B6B47;color:#fff;border:2px solid #fff;font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 1px 5px rgba(0,0,0,.45)}
 .fm span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:8px;background:#C2410C;color:#fff;border:2px solid #fff;font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 1px 5px rgba(0,0,0,.45)}
 .idx.fuel{background:#C2410C;color:#fff}
+.idx.ev{background:#6D28D9;color:#fff}
+.em span{display:grid;place-items:center;width:23px;height:23px;margin:3px;transform:rotate(45deg);border-radius:6px;background:#6D28D9;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.em b{transform:rotate(-45deg);color:#fff;font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace}
+.legend .dm{width:11px;height:11px;background:#6D28D9;border-radius:2px;transform:rotate(45deg)}
 .legend .sq{width:12px;height:12px;background:#C2410C;border-radius:3px}
 .sub{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);margin-top:6px}
 .fuelhead{margin-top:22px}
@@ -93,7 +97,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 <div class="wrap">
   <header>
     <h1>Ruteinfo</h1>
-    <p class="sub">Hoteller og bensinstasjoner langs veien mellom to steder i Norge.</p>
+    <p class="sub">Hoteller, bensinstasjoner og elbil-lading langs veien mellom to steder i Norge.</p>
   </header>
 
   <div class="install" id="install" hidden>
@@ -108,18 +112,19 @@ button.idx{border:0;padding:0;cursor:pointer}
         <label for="to">Til <input id="to" type="text" list="citylist" value="Moss"></label>
       </div>
       <datalist id="citylist"></datalist>
-      <div class="lbl">Maks avstand fra veien
-        <div class="seg" id="corr" role="group" aria-label="Maks avstand fra veien">
+      <div class="lbl">Avstand fra veien
+        <div class="seg" id="corr" role="group" aria-label="Avstand fra veien">
+          <button type="button" data-km="0.3" aria-pressed="false">Ved vei</button>
           <button type="button" data-km="3" aria-pressed="true">3 km</button>
           <button type="button" data-km="10" aria-pressed="false">10 km</button>
           <button type="button" data-km="25" aria-pressed="false">25 km</button>
         </div>
       </div>
-      <div class="lbl">Vis
+      <div class="lbl">Vis (flere kan velges)
         <div class="seg" id="showSeg" role="group" aria-label="Vis">
-          <button type="button" data-v="hotels" aria-pressed="true">Hoteller</button>
-          <button type="button" data-v="fuel" aria-pressed="false">Bensin</button>
-          <button type="button" data-v="both" aria-pressed="false">Begge</button>
+          <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
+          <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
+          <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
         </div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
@@ -130,18 +135,18 @@ button.idx{border:0;padding:0;cursor:pointer}
   <section class="card" id="mapCard">
     <div id="mapWrap">
       <div id="map" role="region" aria-label="Kart over ruta"></div>
-      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span></div>
+      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
     </div>
   </section>
 
   <section class="card" id="nearCard">
     <div class="chart-head"><h2>Nær meg</h2></div>
-    <div class="lbl">Søk etter
+    <div class="lbl">Søk etter (flere kan velges)
       <div class="seg" id="nearShowSeg" role="group" aria-label="Søk etter">
-        <button type="button" data-v="hotels" aria-pressed="true">Hoteller</button>
-        <button type="button" data-v="fuel" aria-pressed="false">Bensin</button>
-        <button type="button" data-v="both" aria-pressed="false">Begge</button>
+        <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
+        <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
+        <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
       </div>
     </div>
     <div class="lbl" style="margin-top:12px">Radius
@@ -184,7 +189,12 @@ button.idx{border:0;padding:0;cursor:pointer}
       <ol id="fuelList"></ol>
       <p class="empty" id="fuelEmpty" hidden></p>
     </div>
-    <p class="note">Data fra OpenStreetMap-bidragsytere. Priser på rom og drivstoff, ledige rom og åpningstider vises ikke alltid. Sjekk hos stedet.</p>
+    <div id="evPart" hidden>
+      <div class="list-head fuelhead"><h2 id="evCount">Ladestasjoner</h2></div>
+      <ol id="evList"></ol>
+      <p class="empty" id="evEmpty" hidden></p>
+    </div>
+    <p class="note">Data fra OpenStreetMap-bidragsytere. Priser (rom, drivstoff og lading), ledige rom og åpningstider vises ikke alltid. Sjekk hos stedet.</p>
   </section>
 </div>
 
@@ -265,7 +275,10 @@ button.idx{border:0;padding:0;cursor:pointer}
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if(isIOS && !isStandalone) $("install").hidden = false;
 
-  var state = { from:null, to:null, route:null, hotels:null, fuel:null, fuelErr:false, show:"hotels", corridor:3, sort:"route", routeKind:"" };
+  var KINDS = ["hotel","fuel","ev"];
+  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"] };
+  var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null}, err:{}, loading:{}, sel:{hotel:true,fuel:false,ev:false},
+    started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
 
   function findCity(txt){
     var q = (txt||"").trim().toLowerCase();
@@ -349,10 +362,12 @@ button.idx{border:0;padding:0;cursor:pointer}
     var coords = pts.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
     return "[out:json][timeout:25];nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"](around:"+Math.round(radiusKm*1000)+","+coords+");out center tags 600;";
   }
-  function fuelQuery(route, radiusKm){
+  function kindQuery(route, radiusKm, kind){
     var pts = sampleRoute(route, Math.max(1.5, radiusKm*0.8), 120);
     var coords = pts.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
-    return "[out:json][timeout:25];nwr[\"amenity\"=\"fuel\"](around:"+Math.round(radiusKm*1000)+","+coords+");out center tags 1500;";
+    var sel = kind==="hotel" ? "nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"]"
+            : kind==="fuel" ? "nwr[\"amenity\"=\"fuel\"]" : "nwr[\"amenity\"=\"charging_station\"]";
+    return "[out:json][timeout:25];"+sel+"(around:"+Math.round(radiusKm*1000)+","+coords+");out center tags "+(kind==="hotel"?600:1500)+";";
   }
   function runOverpass(q, i){
     i = i||0;
@@ -363,12 +378,27 @@ button.idx{border:0;padding:0;cursor:pointer}
   }
 
   var TYPE_NB = { hotel:"Hotell", motel:"Motell", guest_house:"Gjestehus", hostel:"Vandrerhjem", apartment:"Leiligheter" };
-  // One OSM element -> hotel or fuel station (null if unusable)
+  // One OSM element -> hotel / fuel station / charging station (null if unusable)
   function baseItem(e){
     var t = e.tags||{}, la = e.lat!=null?e.lat:(e.center&&e.center.lat), lo = e.lon!=null?e.lon:(e.center&&e.center.lon);
     if(la==null || lo==null) return null;
-    var fuel = t.amenity === "fuel";
-    var name = t.name || (fuel ? (t.brand || t.operator || "Bensinstasjon") : "");
+    var kind = t.amenity==="fuel" ? "fuel" : t.amenity==="charging_station" ? "ev" : "hotel";
+    var info = [];
+    if(kind === "ev"){
+      if(t.motorcar === "no") return null;
+      var sk = [];
+      if(t["socket:ccs"] || t["socket:type2_combo"]) sk.push("CCS");
+      if(t["socket:type2"]) sk.push("Type 2");
+      if(t["socket:chademo"]) sk.push("CHAdeMO");
+      if(t["socket:tesla_supercharger"]) sk.push("Tesla");
+      if(t.bicycle === "yes" && !sk.length) return null;   // e-bike charger
+      if(sk.length) info.push(sk.join(" · "));
+      var kw = 0;
+      Object.keys(t).forEach(function(k){ if(/^socket:[a-z0-9_]+:output$/.test(k)){ var v = parseFloat(String(t[k]).replace(",",".")); if(v > kw) kw = v; } });
+      if(kw) info.push("opptil "+Math.round(kw)+" kW");
+      var cap = parseInt(t.capacity,10); if(cap > 0) info.push(cap+(cap===1?" ladepunkt":" ladepunkter"));
+    }
+    var name = t.name || (kind==="fuel" ? (t.brand||t.operator||"Bensinstasjon") : kind==="ev" ? (t.operator||t.brand||t.network||"Ladestasjon") : "");
     if(!name) return null;
     var st = parseInt(String(t.stars||"").replace(/[^0-9]/g,""),10);
     var city = t["addr:city"] || "";
@@ -376,14 +406,16 @@ button.idx{border:0;padding:0;cursor:pointer}
     var web = t.website || t["contact:website"] || "";
     if(web && !/^https?:\/\//i.test(web)) web = "https://"+web;
     if(web && !/^https:\/\//i.test(web)) web = "";
-    return { id:e.type+e.id, kind:fuel?"fuel":"hotel", name:name, type:fuel?"Bensinstasjon":(TYPE_NB[t.tourism]||""),
-      stars:(fuel||isNaN(st)||st<1||st>5)?0:st, open24:t.opening_hours==="24/7", city:city, addr:addr,
+    return { id:e.type+e.id, kind:kind, name:name,
+      type: kind==="fuel" ? "Bensinstasjon" : kind==="ev" ? "Ladestasjon" : (TYPE_NB[t.tourism]||""),
+      stars:(kind!=="hotel"||isNaN(st)||st<1||st>5)?0:st, open24:t.opening_hours==="24/7", info:info, city:city, addr:addr,
       lat:la, lon:lo, web:web, phone:t.phone||t["contact:phone"]||"" };
   }
   function metaParts(h){
     var p = [];
     if(h.type) p.push(h.type);
     if(h.stars) p.push(h.stars+" stjerner");
+    (h.info||[]).forEach(function(x){ p.push(x); });
     if(h.open24) p.push("døgnåpent");
     if(h.addr) p.push(h.addr);
     return p;
@@ -403,7 +435,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 
   // Never show anything in the start city/town; keep within the corridor
   function inCorridor(h){
-    if(h.off > state.corridor + 0.05) return false;
+    if(h.off > state.corridor + 0.01) return false;
     if(state.from){
       if(h.city && h.city.toLowerCase() === state.from[0].toLowerCase()) return false;
       var S = state.route.proj(state.from[1], state.from[2]), P = state.route.proj(h.lat, h.lon);
@@ -411,8 +443,10 @@ button.idx{border:0;padding:0;cursor:pointer}
     }
     return true;
   }
-  function visibleHotels(){ return (state.hotels && state.show !== "fuel") ? state.hotels.filter(inCorridor) : []; }
-  function visibleFuel(){ return (state.fuel && state.show !== "hotels") ? state.fuel.filter(inCorridor) : []; }
+  function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(inCorridor) : []; }
+  function byAlong(p,q){ return p.along-q.along; }
+  function hasData(){ return state.started; }
+  function corrLabel(){ return state.corridor < 1 ? "300 m" : fmtKm(state.corridor)+" km"; }
 
   function el(name, attrs, text){
     var e = document.createElementNS(NS,name);
@@ -443,22 +477,21 @@ button.idx{border:0;padding:0;cursor:pointer}
       svg.appendChild(el("text",{x:x,y:mt+ih+18,"text-anchor":"middle",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},String(Math.round(k*10)/10)));
     }
     svg.appendChild(el("text",{x:ml+iw,y:H-4,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"system-ui, sans-serif"},"km fra "+a[0]));
-    svg.appendChild(el("text",{x:ml-6,y:mt+9,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},C+" km"));
-    svg.appendChild(el("text",{x:ml-6,y:mt+ih,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},C+" km"));
+    svg.appendChild(el("text",{x:ml-6,y:mt+9,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},fmtKm(C)+" km"));
+    svg.appendChild(el("text",{x:ml-6,y:mt+ih,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},fmtKm(C)+" km"));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--ink)","stroke-width":3,"stroke-linecap":"round"}));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--band)","stroke-width":1,"stroke-dasharray":"7 7"}));
     svg.appendChild(el("text",{x:ml,y:mt-7,"text-anchor":"start",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},a[0]));
     svg.appendChild(el("text",{x:ml+iw,y:mt-7,"text-anchor":"end",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},b[0]));
-    var byAlong = function(p,q){ return p.along-q.along; };
-    visibleHotels().sort(byAlong).forEach(function(h,i){
-      var cx = xs(h.along), cyy = ys(Math.max(-C,Math.min(C,h.signed)));
-      svg.appendChild(el("circle",{cx:cx,cy:cyy,r:8,fill:"var(--accent)",stroke:"var(--surface)","stroke-width":1.5}));
-      svg.appendChild(el("text",{x:cx,y:cyy+3.5,"text-anchor":"middle",fill:"var(--accent-ink)","font-size":9.5,"font-weight":600,"font-family":"ui-monospace, monospace"},String(i+1)));
-    });
-    visibleFuel().sort(byAlong).forEach(function(h,i){
-      var cx = xs(h.along), cyy = ys(Math.max(-C,Math.min(C,h.signed)));
-      svg.appendChild(el("rect",{x:cx-7.5,y:cyy-7.5,width:15,height:15,rx:4,fill:"#C2410C",stroke:"var(--surface)","stroke-width":1.5}));
-      svg.appendChild(el("text",{x:cx,y:cyy+3.5,"text-anchor":"middle",fill:"#fff","font-size":9.5,"font-weight":600,"font-family":"ui-monospace, monospace"},String(i+1)));
+    KINDS.forEach(function(k){
+      visible(k).sort(byAlong).forEach(function(h,i){
+        var cx = xs(h.along), cyy = ys(Math.max(-C,Math.min(C,h.signed))), mark;
+        if(k === "hotel") mark = el("circle",{cx:cx,cy:cyy,r:8,fill:"var(--accent)",stroke:"var(--surface)","stroke-width":1.5});
+        else if(k === "fuel") mark = el("rect",{x:cx-7.5,y:cyy-7.5,width:15,height:15,rx:4,fill:"#C2410C",stroke:"var(--surface)","stroke-width":1.5});
+        else mark = el("polygon",{points:[cx,cyy-10,cx+10,cyy,cx,cyy+10,cx-10,cyy].join(","),fill:"#6D28D9",stroke:"var(--surface)","stroke-width":1.5,"stroke-linejoin":"round"});
+        svg.appendChild(mark);
+        svg.appendChild(el("text",{x:cx,y:cyy+3.5,"text-anchor":"middle",fill:k==="hotel"?"var(--accent-ink)":"#fff","font-size":9.5,"font-weight":600,"font-family":"ui-monospace, monospace"},String(i+1)));
+      });
     });
     host.appendChild(svg);
   }
@@ -473,21 +506,22 @@ button.idx{border:0;padding:0;cursor:pointer}
     mapLayer = L.layerGroup().addTo(lmap);
   }
   function mkIcon(kind, n){
-    return L.divIcon({ className: kind==="fuel"?"fm":"hm", html:"<span>"+n+"</span>", iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] });
+    return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span>"+n+"</span>",
+      iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] });
   }
   function popupFor(h, near){
     var d = document.createElement("div");
     var b = document.createElement("b"); b.textContent = h.name; d.appendChild(b);
     var bits = metaParts(h);
     if(bits.length){ var p = document.createElement("div"); p.textContent = bits.join(" · "); d.appendChild(p); }
-    var q = document.createElement("div"); q.textContent = near ? fmtDist(h.dist)+" mot "+h.dir : fmtKm(h.off)+" km fra veien"; d.appendChild(q);
+    var q = document.createElement("div"); q.textContent = near ? fmtDist(h.dist)+" mot "+h.dir : fmtDist(h.off)+" fra veien"; d.appendChild(q);
     var l = document.createElement("div"); l.style.marginTop = "6px";
     function link(href, txt){
       var a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = txt;
       if(l.hasChildNodes()) l.appendChild(document.createTextNode("  "));
       l.appendChild(a);
     }
-    if(h.kind === "fuel") link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
+    if(h.kind !== "hotel") link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
     else link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
     if(h.web) link(h.web, "Nettside");
     d.appendChild(l);
@@ -497,7 +531,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     if(mapMode === "near") return;
     if(!lmap || !state.route || !state.from) return;
     $("pairLbl").textContent = state.from[0]+" → "+state.to[0];
-    $("lgHotel").hidden = state.show === "fuel"; $("lgFuel").hidden = state.show === "hotels";
+    $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev;
     mapLayer.clearLayers(); markerById = {};
     var ll = state.route.latlons.map(function(p){ return [p[0],p[1]]; });
     L.polyline(ll, { color:"#0B6B47", weight:6, opacity:.95, lineJoin:"round" }).addTo(mapLayer);
@@ -506,9 +540,9 @@ button.idx{border:0;padding:0;cursor:pointer}
       L.circleMarker(e[1], { radius:7, color:"#fff", weight:2, fillColor:"#16201B", fillOpacity:1 })
         .bindTooltip(e[0][0], { permanent:true, direction:"top", offset:[0,-6] }).addTo(mapLayer);
     });
-    var pts = ll.slice(), byAlong = function(p,q){ return p.along-q.along; };
-    [visibleHotels().sort(byAlong), visibleFuel().sort(byAlong)].forEach(function(arr){
-      arr.forEach(function(h,i){
+    var pts = ll.slice();
+    KINDS.forEach(function(k){
+      visible(k).sort(byAlong).forEach(function(h,i){
         var m = L.marker([h.lat,h.lon], { icon:mkIcon(h.kind,i+1), title:h.name });
         m.bindPopup(popupFor(h)); m.addTo(mapLayer); markerById[h.id] = m; pts.push([h.lat,h.lon]);
       });
@@ -519,7 +553,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   // One list row, used by both the route lists and "Nær meg"
   function buildItem(h, n, ctx){
     var li = document.createElement("li"); li.className = "hotel";
-    var b = document.createElement("button"); b.type = "button"; b.className = "idx"+(h.kind==="fuel"?" fuel":""); b.textContent = n;
+    var b = document.createElement("button"); b.type = "button"; b.className = "idx"+(h.kind!=="hotel"?" "+h.kind:""); b.textContent = n;
     b.setAttribute("aria-label","Vis "+h.name+" på kartet");
     b.addEventListener("click", function(){
       var mk = ctx.markers()[h.id]; if(!mk || !lmap) return;
@@ -531,13 +565,13 @@ button.idx{border:0;padding:0;cursor:pointer}
     var parts = metaParts(h);
     if(parts.length){ var m = document.createElement("p"); m.className = "meta"; m.textContent = parts.join(" · "); mid.appendChild(m); }
     var r = document.createElement("p"); r.className = "meta mono";
-    r.textContent = ctx.pos ? fmtDist(h.dist)+" mot "+h.dir : fmtKm(h.along)+" km fra "+state.from[0]+" · "+fmtKm(h.off)+" km fra veien";
+    r.textContent = ctx.pos ? fmtDist(h.dist)+" mot "+h.dir : fmtKm(h.along)+" km fra "+state.from[0]+" · "+fmtDist(h.off)+" fra veien";
     mid.appendChild(r);
     var links = document.createElement("div"); links.className = "links";
     function link(href, txt){ var a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = txt; links.appendChild(a); }
     if(ctx.pos) link("https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route="+encodeURIComponent(ctx.pos[0]+","+ctx.pos[1]+";"+h.lat+","+h.lon), "Veibeskrivelse");
     else link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
-    if(h.kind !== "fuel") link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
+    if(h.kind === "hotel") link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
     if(h.web) link(h.web, "Nettside");
     mid.appendChild(links);
     li.appendChild(b); li.appendChild(mid);
@@ -545,43 +579,48 @@ button.idx{border:0;padding:0;cursor:pointer}
   }
   var routeCtx = { pos:null, zoom:13, markers:function(){ return markerById; } };
 
-  function renderFuel(){
-    var list = $("fuelList"), empty = $("fuelEmpty"); list.textContent = "";
-    if(state.show === "hotels") return;
-    var shown = visibleFuel().sort(function(p,q){ return p.along-q.along; });
-    $("fuelCount").textContent = state.fuel ? shown.length + (shown.length===1?" bensinstasjon":" bensinstasjoner") : "Bensinstasjoner";
-    if(!state.fuel){
-      empty.hidden = false;
-      empty.textContent = state.fuelErr ? "Fikk ikke hentet bensinstasjoner akkurat nå. Søk på nytt om litt." : "Henter bensinstasjoner…";
-      return;
-    }
+  function loadMsg(kind){
+    var nm = NAMES[kind];
+    return state.err[kind] ? "Fikk ikke hentet "+nm[1]+" akkurat nå. Søk på nytt om litt." : "Henter "+nm[1]+"…";
+  }
+  function renderExtra(kind){
+    var part = $(kind+"Part"), list = $(kind+"List"), empty = $(kind+"Empty"), nm = NAMES[kind];
+    list.textContent = "";
+    part.hidden = !state.sel[kind];
+    if(!state.sel[kind]) return;
+    var items = state.items[kind], shown = visible(kind).sort(byAlong);
+    $(kind+"Count").textContent = items ? shown.length+" "+(shown.length===1?nm[0]:nm[1]) : nm[2];
+    if(!items){ empty.hidden = false; empty.textContent = loadMsg(kind); return; }
     empty.hidden = shown.length > 0;
-    if(!shown.length) empty.textContent = "Ingen bensinstasjoner innenfor "+state.corridor+" km fra ruta i OpenStreetMap. Prøv en bredere avstand.";
+    if(!shown.length) empty.textContent = "Ingen "+nm[1]+" innenfor "+corrLabel()+" fra ruta i OpenStreetMap. Prøv en bredere avstand.";
     shown.forEach(function(h,i){ list.appendChild(buildItem(h, i+1, routeCtx)); });
   }
 
   function renderList(){
     var res = $("results"), list = $("list"), empty = $("empty");
-    if(!state.hotels){ res.hidden = true; return; }
+    if(!state.started){ res.hidden = true; return; }
     res.hidden = false; list.textContent = "";
-    var showH = state.show !== "fuel", showF = state.show !== "hotels";
-    $("hotelPart").hidden = !showH; $("fuelPart").hidden = !showF;
-    if(showH){
-      var shown = visibleHotels();
-      var byRoute = shown.slice().sort(function(p,q){return p.along-q.along;});
+    $("hotelPart").hidden = !state.sel.hotel;
+    if(state.sel.hotel){
+      var shown = visible("hotel");
+      var byRoute = shown.slice().sort(byAlong);
       var idx = {}; byRoute.forEach(function(h,i){ idx[h.id] = i+1; });
       var arr = shown.slice();
       if(state.sort==="stars") arr.sort(function(p,q){ return q.stars-p.stars || p.along-q.along; });
       else if(state.sort==="name") arr.sort(function(p,q){ return p.name.localeCompare(q.name,"nb"); });
       else arr = byRoute;
-      $("count").textContent = shown.length + (shown.length===1?" hotell":" hoteller");
-      if(!shown.length){
-        empty.hidden = false;
-        empty.textContent = "Ingen overnattingssteder innenfor "+state.corridor+" km fra ruta. Prøv en bredere avstand.";
-      } else empty.hidden = true;
+      if(!state.items.hotel){
+        $("count").textContent = "Hoteller"; empty.hidden = false; empty.textContent = loadMsg("hotel");
+      } else {
+        $("count").textContent = shown.length + (shown.length===1?" hotell":" hoteller");
+        if(!shown.length){
+          empty.hidden = false;
+          empty.textContent = "Ingen overnattingssteder innenfor "+corrLabel()+" fra ruta. Prøv en bredere avstand.";
+        } else empty.hidden = true;
+      }
       arr.forEach(function(h){ list.appendChild(buildItem(h, idx[h.id], routeCtx)); });
     }
-    renderFuel();
+    renderExtra("fuel"); renderExtra("ev");
     drawChart();
     updateMap();
   }
@@ -598,14 +637,14 @@ button.idx{border:0;padding:0;cursor:pointer}
     if(state.route){
       $("routeLen").textContent = "ca. "+fmtKm(state.route.len)+" km "+(state.route.kind==="vei"?"langs veien":"luftlinje");
       $("routeNote").textContent = state.route.kind==="vei"
-        ? "Avstandene er målt fra den kjørte veien. Hoteller og bensinstasjoner i startstedet ("+state.from[0]+") tas ikke med."
-        : "Fikk ikke veidata, så ruta er en rett linje og avstandene er luftlinje. Hoteller og bensinstasjoner i startstedet ("+state.from[0]+") tas ikke med.";
+        ? "Avstandene er målt fra den kjørte veien. Treff i startstedet ("+state.from[0]+") tas ikke med."
+        : "Fikk ikke veidata, så ruta er en rett linje og avstandene er luftlinje. Treff i startstedet ("+state.from[0]+") tas ikke med.";
     }
   }
 
 
   // ---------- Nær meg ----------
-  var nearKm = 15, nearBusy = false, nearMarkers = {}, nearShow = "hotels";
+  var nearKm = 15, nearBusy = false, nearMarkers = {}, nearSel = { hotel:true, fuel:false, ev:false };
   var COMPASS = ["nord","nordøst","øst","sørøst","sør","sørvest","vest","nordvest"];
   function haversineKm(la1,lo1,la2,lo2){
     var R = 6371, rad = Math.PI/180, dLa = (la2-la1)*rad, dLo = (lo2-lo1)*rad;
@@ -626,41 +665,47 @@ button.idx{border:0;padding:0;cursor:pointer}
     if(e && e.code === 3) return "Fikk ikke posisjonen i tide. Gå gjerne ut eller koble til Wi-Fi, og prøv igjen.";
     return "Fikk ikke tak i posisjonen din. Prøv igjen om litt.";
   }
-  function nearNoun(){ return nearShow==="fuel" ? "bensinstasjoner" : nearShow==="both" ? "hoteller og bensinstasjoner" : "hoteller"; }
-  function syncNearBtn(){ $("nearBtn").textContent = nearShow==="fuel" ? "Bensinstasjoner nær meg" : nearShow==="both" ? "Hoteller og bensin nær meg" : "Hoteller nær meg"; }
+  function nearKinds(){ return KINDS.filter(function(k){ return nearSel[k]; }); }
+  function nearNoun(){
+    var n = nearKinds().map(function(k){ return NAMES[k][1]; });
+    return n.length > 1 ? n.slice(0,-1).join(", ")+" og "+n[n.length-1] : n[0];
+  }
+  function syncNearBtn(){
+    var k = nearKinds();
+    $("nearBtn").textContent = k.length > 1 ? "Søk nær meg" : NAMES[k[0]][2]+" nær meg";
+  }
   function nearQuery(pos){
     var a = "(around:"+(nearKm*1000)+","+pos[0].toFixed(5)+","+pos[1].toFixed(5)+");", parts = [];
-    if(nearShow !== "fuel") parts.push("nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"]"+a);
-    if(nearShow !== "hotels") parts.push("nwr[\"amenity\"=\"fuel\"]"+a);
-    return "[out:json][timeout:25];("+parts.join("")+");out center tags 800;";
+    if(nearSel.hotel) parts.push("nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"]"+a);
+    if(nearSel.fuel) parts.push("nwr[\"amenity\"=\"fuel\"]"+a);
+    if(nearSel.ev) parts.push("nwr[\"amenity\"=\"charging_station\"]"+a);
+    return "[out:json][timeout:25];("+parts.join("")+");out center tags 1200;";
   }
 
-  function renderNear(pos, hs, fs){
+  function renderNear(pos, by){
     var list = $("nearList"); list.textContent = "";
-    var both = hs.length && fs.length;
+    var groups = KINDS.filter(function(k){ return by[k].length; });
     var ctx = { pos:pos, zoom:14, markers:function(){ return nearMarkers; } };
-    function group(title, arr){
-      if(!arr.length) return;
-      if(both){ var s = document.createElement("li"); s.className = "sub"; s.textContent = title; list.appendChild(s); }
-      arr.forEach(function(h,i){ list.appendChild(buildItem(h, i+1, ctx)); });
-    }
-    group("Hoteller", hs); group("Bensinstasjoner", fs);
+    groups.forEach(function(k){
+      if(groups.length > 1){ var s = document.createElement("li"); s.className = "sub"; s.textContent = NAMES[k][2]; list.appendChild(s); }
+      by[k].forEach(function(h,i){ list.appendChild(buildItem(h, i+1, ctx)); });
+    });
     $("nearNote").hidden = false;
   }
 
-  function drawNearMap(pos, acc, hs, fs){
+  function drawNearMap(pos, acc, by){
     if(!lmap) return;
     mapMode = "near"; mapLayer.clearLayers(); nearMarkers = {};
     $("pairLbl").textContent = "Nær meg · "+nearKm+" km";
-    $("lgHotel").hidden = !hs.length; $("lgFuel").hidden = !fs.length;
+    $("lgHotel").hidden = !by.hotel.length; $("lgFuel").hidden = !by.fuel.length; $("lgEv").hidden = !by.ev.length;
     if(acc && acc < 5000) L.circle(pos, { radius:acc, color:"#2563EB", weight:1, fillColor:"#2563EB", fillOpacity:.12 }).addTo(mapLayer);
     L.circleMarker(pos, { radius:8, color:"#fff", weight:3, fillColor:"#2563EB", fillOpacity:1 }).bindTooltip("Du er her", { permanent:true, direction:"top", offset:[0,-8] }).addTo(mapLayer);
     var pts = [pos];
-    [hs, fs].forEach(function(arr){
-      arr.forEach(function(h,i){
+    KINDS.forEach(function(k){
+      by[k].forEach(function(h,i){
         var m = L.marker([h.lat,h.lon], { icon:mkIcon(h.kind,i+1), title:h.name });
         m.bindPopup(popupFor(h, true));
-        m.addTo(mapLayer); nearMarkers[h.id] = m; if(i < 12) pts.push([h.lat,h.lon]);
+        m.addTo(mapLayer); nearMarkers[h.id] = m; if(i < 8) pts.push([h.lat,h.lon]);
       });
     });
     lmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
@@ -675,25 +720,24 @@ button.idx{border:0;padding:0;cursor:pointer}
       var pos = [p.coords.latitude, p.coords.longitude], acc = p.coords.accuracy;
       st.textContent = "Søker etter "+nearNoun()+" innenfor "+nearKm+" km…";
       runOverpass(nearQuery(pos)).then(function(json){
-        var seen = {}, hs = [], fs = [];
+        var seen = {}, by = { hotel:[], fuel:[], ev:[] }, total = 0;
         (json.elements||[]).forEach(function(e){
-          var h = baseItem(e); if(!h || seen[h.id]) return; seen[h.id] = 1;
+          var h = baseItem(e); if(!h || seen[h.id] || !nearSel[h.kind]) return; seen[h.id] = 1;
           h.dist = haversineKm(pos[0],pos[1],h.lat,h.lon); h.dir = bearingName(pos[0],pos[1],h.lat,h.lon);
-          (h.kind==="fuel" ? fs : hs).push(h);
+          by[h.kind].push(h);
         });
-        var byDist = function(a,b){ return a.dist-b.dist; }, cap = nearShow==="both" ? 20 : 40;
-        hs.sort(byDist); fs.sort(byDist); hs = hs.slice(0,cap); fs = fs.slice(0,cap);
-        if(!hs.length && !fs.length){
+        var cap = Math.floor(40 / nearKinds().length);
+        KINDS.forEach(function(k){ by[k].sort(function(a,b){ return a.dist-b.dist; }); by[k] = by[k].slice(0,cap); total += by[k].length; });
+        if(!total){
           $("nearList").textContent = ""; $("nearNote").hidden = true;
           st.className = "msg err"; st.textContent = "Fant ingen "+nearNoun()+" innenfor "+nearKm+" km. Prøv en større radius.";
           if(lmap){ mapMode = "near"; mapLayer.clearLayers(); L.circleMarker(pos,{radius:8,color:"#fff",weight:3,fillColor:"#2563EB",fillOpacity:1}).addTo(mapLayer); lmap.setView(pos,10); }
           return;
         }
         var msg = [];
-        if(hs.length) msg.push("Nærmeste hotell: "+hs[0].name+", "+fmtDist(hs[0].dist)+" mot "+hs[0].dir+".");
-        if(fs.length) msg.push("Nærmeste bensinstasjon: "+fs[0].name+", "+fmtDist(fs[0].dist)+" mot "+fs[0].dir+".");
+        KINDS.forEach(function(k){ if(by[k].length) msg.push("Nærmeste "+NAMES[k][0]+": "+by[k][0].name+", "+fmtDist(by[k][0].dist)+" mot "+by[k][0].dir+"."); });
         st.textContent = msg.join(" ");
-        renderNear(pos, hs, fs); drawNearMap(pos, acc, hs, fs);
+        renderNear(pos, by); drawNearMap(pos, acc, by);
       }).catch(function(){
         st.className = "msg err"; st.textContent = navigator.onLine === false ? "Du er uten nett. Koble til og prøv igjen." : "Fikk ikke hentet data akkurat nå. Prøv igjen om litt.";
       }).then(function(){ nearBusy = false; $("nearBtn").disabled = false; });
@@ -708,19 +752,41 @@ button.idx{border:0;padding:0;cursor:pointer}
     nearKm = parseInt(btn.dataset.km,10);
     Array.prototype.forEach.call($("nearR").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
   });
+  // Multi-select toggles; at least one must stay on
+  function toggleKind(sel, btn){
+    var k = btn.dataset.k, on = !sel[k];
+    if(!on && KINDS.filter(function(x){ return sel[x]; }).length === 1) return false;
+    sel[k] = on; btn.setAttribute("aria-pressed", on?"true":"false");
+    return true;
+  }
   $("nearShowSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    nearShow = btn.dataset.v; syncNearBtn();
-    Array.prototype.forEach.call($("nearShowSeg").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
+    if(toggleKind(nearSel, btn)) syncNearBtn();
   });
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    state.show = btn.dataset.v;
-    Array.prototype.forEach.call($("showSeg").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
-    if(state.hotels){ if(mapMode === "near") fitPending = true; mapMode = "route"; renderList(); }
+    if(!toggleKind(state.sel, btn)) return;
+    if(!state.started) return;
+    if(mapMode === "near") fitPending = true;
+    mapMode = "route"; renderList();
+    var k = btn.dataset.k;
+    if(state.sel[k] && !state.items[k] && !state.loading[k]) loadKind(k).then(renderList);
   });
 
   var busy = false;
+  // Fetch one kind of place along the current route; always resolves (errors are kept in state.err)
+  function loadKind(kind){
+    var tok = state.token, route = state.route;
+    if(state.items[kind] || state.loading[kind]) return Promise.resolve();
+    state.loading[kind] = true; state.err[kind] = false;
+    return runOverpass(kindQuery(route, state.qKm, kind)).then(function(json){
+      if(tok === state.token) state.items[kind] = toItems(json, route, kind);
+    }, function(){
+      if(tok === state.token) state.err[kind] = true;
+    }).then(function(){
+      if(tok === state.token) state.loading[kind] = false;
+    });
+  }
   function search(){
     var st = $("status"); st.className = "msg"; st.textContent = "";
     mapMode = "route"; fitPending = true;
@@ -728,22 +794,23 @@ button.idx{border:0;padding:0;cursor:pointer}
     if(p.error){ st.className = "msg err"; st.textContent = p.error; return; }
     if(busy) return;
     busy = true; $("go").disabled = true;
-    state.from = p.a; state.to = p.b; state.hotels = null; state.fuel = null; state.fuelErr = false; $("results").hidden = true;
+    state.token++; state.items = { hotel:null, fuel:null, ev:null }; state.err = {}; state.loading = {}; state.started = false;
+    state.from = p.a; state.to = p.b; state.qKm = Math.max(state.corridor, 3); $("results").hidden = true;
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
       state.route = route; showRouteHeader(); drawChart(); fitPending = true; updateMap();
-      st.textContent = "Henter hoteller langs ruta…";
-      return runOverpass(overpassQuery(route, state.corridor)).then(function(json){
-        state.hotels = toItems(json, route, "hotel"); fitPending = true;
-        renderList();
-        st.textContent = "Henter bensinstasjoner langs ruta…";
-        return runOverpass(fuelQuery(route, state.corridor)).then(function(j2){
-          state.fuel = toItems(j2, route, "fuel");
-        }, function(){ state.fuelErr = true; }).then(function(){
-          st.textContent = (state.hotels.length || state.show === "fuel") ? "" : "Fant ingen overnattingssteder i OpenStreetMap langs denne ruta.";
+      var chain = Promise.resolve(), first = true;
+      KINDS.filter(function(k){ return state.sel[k]; }).forEach(function(k){
+        chain = chain.then(function(){ st.textContent = "Henter "+NAMES[k][1]+" langs ruta…"; return loadKind(k); }).then(function(){
+          state.started = true; if(first){ first = false; fitPending = true; }
           renderList();
         });
+      });
+      return chain.then(function(){
+        var ks = KINDS.filter(function(k){ return state.sel[k]; });
+        if(ks.every(function(k){ return state.err[k]; })) throw new Error("all failed");
+        st.textContent = "";
       });
     }).catch(function(e){
       st.className = "msg err";
@@ -756,15 +823,15 @@ button.idx{border:0;padding:0;cursor:pointer}
   $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
   $("swap").addEventListener("click", function(){
     var f = $("from"), t = $("to"), x = f.value; f.value = t.value; t.value = x;
-    if(state.hotels) search();
+    if(state.started) search();
   });
   $("corr").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    var km = parseInt(btn.dataset.km,10), wider = km > state.corridor;
+    var km = parseFloat(btn.dataset.km), wider = km > (state.qKm||0);
     state.corridor = km;
     Array.prototype.forEach.call($("corr").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
-    if(state.hotels && wider) search();   // wider corridor needs a new query
-    else if(state.hotels) renderList();
+    if(state.started && wider) search();   // wider corridor needs a new query
+    else if(state.started) renderList();
     else drawChart();
   });
   $("sort").addEventListener("click", function(e){
