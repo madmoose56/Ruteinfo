@@ -1,6 +1,6 @@
 {
-  "name": "Hotellrute",
-  "short_name": "Hotellrute",
+  "name": "Ruteinfo",
+  "short_name": "Ruteinfo",
   "description": "Hoteller langs veien mellom to norske byer.",
   "lang": "nb",
   "start_url": "./",

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Hotellrute</title>
+<title>Ruteinfo</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#0B6B47">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Hotellrute">
+<meta name="apple-mobile-web-app-title" content="Ruteinfo">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
 <style>
@@ -87,7 +87,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 <body>
 <div class="wrap">
   <header>
-    <h1>Hotellrute</h1>
+    <h1>Ruteinfo</h1>
     <p class="sub">Hoteller langs veien mellom to steder i Norge.</p>
   </header>
 
@@ -544,7 +544,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   function fmtDist(km){ return km < 1 ? Math.round(km*1000/10)*10+" m" : fmtKm(km)+" km"; }
 
   function nearError(e){
-    if(e && e.code === 1) return "Posisjon er avslått. På iPhone: Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari (eller Hotellrute) → «Mens du bruker appen».";
+    if(e && e.code === 1) return "Posisjon er avslått. På iPhone: Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari (eller Ruteinfo) → «Mens du bruker appen».";
     if(e && e.code === 3) return "Fikk ikke posisjonen i tide. Gå gjerne ut eller koble til Wi-Fi, og prøv igjen.";
     return "Fikk ikke tak i posisjonen din. Prøv igjen om litt.";
   }
