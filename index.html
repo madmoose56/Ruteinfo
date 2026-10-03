@@ -64,8 +64,8 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .links{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
 .links a{color:var(--accent);font-weight:600;font-size:14px}
 .empty{color:var(--ink-2);margin:12px 0 0}
-#mapWrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-#map{height:380px;background:var(--band);z-index:0}
+#mapWrap,#nearMapWrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+#map,#nmap{height:380px;background:var(--band);z-index:0}
 .legend,.pair{position:absolute;z-index:800;background:rgba(255,255,255,.94);color:#16201B;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-size:14px}
 .legend{top:10px;left:10px;display:flex;gap:16px;align-items:center;padding:8px 14px}
 .legend i{display:inline-block;vertical-align:middle;margin-right:6px}
@@ -86,6 +86,9 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .leaflet-popup-content b{display:block;margin-bottom:2px}
 .leaflet-popup-content a{color:#0B6B47;font-weight:600}
 button.idx{border:0;padding:0;cursor:pointer}
+.view{display:flex;flex-direction:column;gap:16px}
+.view[hidden]{display:none}
+.navlink{display:inline-block;margin-top:12px;padding:9px 14px;border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:600;font-size:15px;text-decoration:none}
 .install{background:var(--band);border-radius:10px;padding:12px 14px;font-size:14px}
 @media (max-width:480px){
   .cities{grid-template-columns:1fr 1fr}
@@ -95,9 +98,11 @@ button.idx{border:0;padding:0;cursor:pointer}
 </head>
 <body>
 <div class="wrap">
+<div class="view" id="viewRoute">
   <header>
     <h1>Ruteinfo</h1>
     <p class="sub">Hoteller, bensinstasjoner og elbil-lading langs veien mellom to steder i Norge.</p>
+    <a class="navlink" href="#near">Nær meg →</a>
   </header>
 
   <div class="install" id="install" hidden>
@@ -140,28 +145,6 @@ button.idx{border:0;padding:0;cursor:pointer}
     </div>
   </section>
 
-  <section class="card" id="nearCard">
-    <div class="chart-head"><h2>Nær meg</h2></div>
-    <div class="lbl">Søk etter (flere kan velges)
-      <div class="seg" id="nearShowSeg" role="group" aria-label="Søk etter">
-        <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
-        <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
-        <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
-      </div>
-    </div>
-    <div class="lbl" style="margin-top:12px">Radius
-      <div class="seg" id="nearR" role="group" aria-label="Radius">
-        <button type="button" data-km="5" aria-pressed="false">5 km</button>
-        <button type="button" data-km="15" aria-pressed="true">15 km</button>
-        <button type="button" data-km="30" aria-pressed="false">30 km</button>
-      </div>
-    </div>
-    <button class="go" id="nearBtn" type="button" style="margin-top:12px;width:100%">Hoteller nær meg</button>
-    <p class="msg" id="nearStatus" role="status"></p>
-    <ol id="nearList"></ol>
-    <p class="note" id="nearNote" hidden>Avstanden er luftlinje fra posisjonen din. Posisjonen brukes bare i nettleseren din og lagres ikke.</p>
-  </section>
-
   <section class="card">
     <div class="chart-head">
       <h2 id="routeTitle">Oslo – Moss</h2>
@@ -196,6 +179,47 @@ button.idx{border:0;padding:0;cursor:pointer}
     </div>
     <p class="note">Data fra OpenStreetMap-bidragsytere. Priser (rom, drivstoff og lading), ledige rom og åpningstider vises ikke alltid. Sjekk hos stedet.</p>
   </section>
+</div>
+
+<div class="view" id="viewNear" hidden>
+  <header>
+    <h1>Nær meg</h1>
+    <p class="sub">Hoteller, bensinstasjoner og ladestasjoner nærmest posisjonen din.</p>
+    <a class="navlink" href="#route">← Til rutesøket</a>
+  </header>
+
+  <section class="card" id="nearCard">
+    <div class="lbl">Søk etter (flere kan velges)
+      <div class="seg" id="nearShowSeg" role="group" aria-label="Søk etter">
+        <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
+        <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
+        <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
+      </div>
+    </div>
+    <div class="lbl" style="margin-top:12px">Radius
+      <div class="seg" id="nearR" role="group" aria-label="Radius">
+        <button type="button" data-km="5" aria-pressed="false">5 km</button>
+        <button type="button" data-km="15" aria-pressed="true">15 km</button>
+        <button type="button" data-km="30" aria-pressed="false">30 km</button>
+      </div>
+    </div>
+    <button class="go" id="nearBtn" type="button" style="margin-top:12px;width:100%">Hoteller nær meg</button>
+    <p class="msg" id="nearStatus" role="status"></p>
+  </section>
+
+  <section class="card" id="nearMapCard" hidden>
+    <div id="nearMapWrap">
+      <div id="nmap" role="region" aria-label="Kart nær deg"></div>
+      <div class="legend"><span><i class="dt" style="background:#2563EB"></i>Du</span><span id="nlgHotel"><i class="dt"></i>Hotell</span><span id="nlgFuel"><i class="sq"></i>Bensin</span><span id="nlgEv"><i class="dm"></i>Lading</span></div>
+      <div class="pair" id="nearPair"></div>
+    </div>
+  </section>
+
+  <section class="card" id="nearListCard" hidden>
+    <ol id="nearList"></ol>
+    <p class="note" id="nearNote">Avstanden er luftlinje fra posisjonen din. Posisjonen brukes bare i nettleseren din og lagres ikke.</p>
+  </section>
+</div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -504,7 +528,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   }
 
 
-  var lmap = null, mapLayer = null, markerById = {}, fitPending = true, mapMode = "route";
+  var lmap = null, mapLayer = null, markerById = {}, fitPending = true;
   function initMap(){
     if(typeof L === "undefined"){ $("mapCard").hidden = true; return; }
     lmap = L.map("map", { scrollWheelZoom:false }).setView([64,12],4);
@@ -535,7 +559,6 @@ button.idx{border:0;padding:0;cursor:pointer}
     return d;
   }
   function updateMap(){
-    if(mapMode === "near") return;
     if(!lmap || !state.route || !state.from) return;
     $("pairLbl").textContent = state.from[0]+" → "+state.to[0];
     $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev;
@@ -563,9 +586,9 @@ button.idx{border:0;padding:0;cursor:pointer}
     var b = document.createElement("button"); b.type = "button"; b.className = "idx"+(h.kind!=="hotel"?" "+h.kind:""); b.textContent = n;
     b.setAttribute("aria-label","Vis "+h.name+" på kartet");
     b.addEventListener("click", function(){
-      var mk = ctx.markers()[h.id]; if(!mk || !lmap) return;
-      $("mapCard").scrollIntoView({ behavior:"smooth", block:"center" });
-      lmap.setView([h.lat,h.lon], Math.max(lmap.getZoom(), ctx.zoom)); mk.openPopup();
+      var mk = ctx.markers()[h.id], mp = ctx.map(); if(!mk || !mp) return;
+      $(ctx.card).scrollIntoView({ behavior:"smooth", block:"center" });
+      mp.setView([h.lat,h.lon], Math.max(mp.getZoom(), ctx.zoom)); mk.openPopup();
     });
     var mid = document.createElement("div");
     var t = document.createElement("h3"); t.textContent = h.name; mid.appendChild(t);
@@ -584,7 +607,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     li.appendChild(b); li.appendChild(mid);
     return li;
   }
-  var routeCtx = { pos:null, zoom:13, markers:function(){ return markerById; } };
+  var routeCtx = { pos:null, zoom:13, card:"mapCard", map:function(){ return lmap; }, markers:function(){ return markerById; } };
 
   function loadMsg(kind){
     var nm = NAMES[kind];
@@ -692,30 +715,46 @@ button.idx{border:0;padding:0;cursor:pointer}
   function renderNear(pos, by){
     var list = $("nearList"); list.textContent = "";
     var groups = KINDS.filter(function(k){ return by[k].length; });
-    var ctx = { pos:pos, zoom:14, markers:function(){ return nearMarkers; } };
+    var ctx = { pos:pos, zoom:14, card:"nearMapCard", map:function(){ return nmap; }, markers:function(){ return nearMarkers; } };
     groups.forEach(function(k){
       if(groups.length > 1){ var s = document.createElement("li"); s.className = "sub"; s.textContent = NAMES[k][2]; list.appendChild(s); }
       by[k].forEach(function(h,i){ list.appendChild(buildItem(h, i+1, ctx)); });
     });
-    $("nearNote").hidden = false;
+    $("nearListCard").hidden = false;
   }
 
+  // The "Nær meg" page has its own map
+  var nmap = null, nlayer = null;
+  function nearMapBase(){
+    $("nearMapCard").hidden = false;
+    if(typeof L === "undefined"){ $("nearMapCard").hidden = true; return false; }
+    if(!nmap){
+      nmap = L.map("nmap", { scrollWheelZoom:false }).setView([64,12],4);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19,
+        attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(nmap);
+      nlayer = L.layerGroup().addTo(nmap);
+    }
+    nmap.invalidateSize(); nlayer.clearLayers(); nearMarkers = {};
+    return true;
+  }
+  function youMarker(pos, acc){
+    if(acc && acc < 5000) L.circle(pos, { radius:acc, color:"#2563EB", weight:1, fillColor:"#2563EB", fillOpacity:.12 }).addTo(nlayer);
+    L.circleMarker(pos, { radius:8, color:"#fff", weight:3, fillColor:"#2563EB", fillOpacity:1 }).bindTooltip("Du er her", { permanent:true, direction:"top", offset:[0,-8] }).addTo(nlayer);
+  }
   function drawNearMap(pos, acc, by){
-    if(!lmap) return;
-    mapMode = "near"; mapLayer.clearLayers(); nearMarkers = {};
-    $("pairLbl").textContent = "Nær meg · "+nearKm+" km";
-    $("lgHotel").hidden = !by.hotel.length; $("lgFuel").hidden = !by.fuel.length; $("lgEv").hidden = !by.ev.length;
-    if(acc && acc < 5000) L.circle(pos, { radius:acc, color:"#2563EB", weight:1, fillColor:"#2563EB", fillOpacity:.12 }).addTo(mapLayer);
-    L.circleMarker(pos, { radius:8, color:"#fff", weight:3, fillColor:"#2563EB", fillOpacity:1 }).bindTooltip("Du er her", { permanent:true, direction:"top", offset:[0,-8] }).addTo(mapLayer);
+    if(!nearMapBase()) return;
+    $("nearPair").textContent = "Nær meg · "+nearKm+" km";
+    $("nlgHotel").hidden = !by.hotel.length; $("nlgFuel").hidden = !by.fuel.length; $("nlgEv").hidden = !by.ev.length;
+    youMarker(pos, acc);
     var pts = [pos];
     KINDS.forEach(function(k){
       by[k].forEach(function(h,i){
         var m = L.marker([h.lat,h.lon], { icon:mkIcon(h.kind,i+1), title:h.name });
         m.bindPopup(popupFor(h, true));
-        m.addTo(mapLayer); nearMarkers[h.id] = m; if(i < 8) pts.push([h.lat,h.lon]);
+        m.addTo(nlayer); nearMarkers[h.id] = m; if(i < 8) pts.push([h.lat,h.lon]);
       });
     });
-    lmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
+    nmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
   }
 
   function nearSearch(){
@@ -736,9 +775,9 @@ button.idx{border:0;padding:0;cursor:pointer}
         var cap = Math.floor(40 / nearKinds().length);
         KINDS.forEach(function(k){ by[k].sort(function(a,b){ return a.dist-b.dist; }); by[k] = by[k].slice(0,cap); total += by[k].length; });
         if(!total){
-          $("nearList").textContent = ""; $("nearNote").hidden = true;
+          $("nearList").textContent = ""; $("nearListCard").hidden = true;
           st.className = "msg err"; st.textContent = "Fant ingen "+nearNoun()+" innenfor "+nearKm+" km. Prøv en større radius.";
-          if(lmap){ mapMode = "near"; mapLayer.clearLayers(); L.circleMarker(pos,{radius:8,color:"#fff",weight:3,fillColor:"#2563EB",fillOpacity:1}).addTo(mapLayer); lmap.setView(pos,10); }
+          if(nearMapBase()){ $("nearPair").textContent = "Nær meg · "+nearKm+" km"; $("nlgHotel").hidden = $("nlgFuel").hidden = $("nlgEv").hidden = true; youMarker(pos, acc); nmap.setView(pos,10); }
           return;
         }
         var msg = [];
@@ -774,8 +813,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     var btn = e.target.closest("button"); if(!btn) return;
     if(!toggleKind(state.sel, btn)) return;
     if(!state.started) return;
-    if(mapMode === "near") fitPending = true;
-    mapMode = "route"; renderList();
+    renderList();
     var k = btn.dataset.k;
     if(state.sel[k] && !state.items[k] && !state.loading[k]) loadKind(k).then(renderList);
   });
@@ -796,7 +834,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   }
   function search(){
     var st = $("status"); st.className = "msg"; st.textContent = "";
-    mapMode = "route"; fitPending = true;
+    fitPending = true;
     var p = cityPair();
     if(p.error){ st.className = "msg err"; st.textContent = p.error; return; }
     if(busy) return;
@@ -855,6 +893,17 @@ button.idx{border:0;padding:0;cursor:pointer}
     showRouteHeader(); $("routeNote").textContent = "Trykk Søk langs ruta. Ruta følger veien når veidata er tilgjengelig.";
     $("routeLen").textContent = ""; drawChart(); initMap(); updateMap();
   } else initMap();
+
+  // Two pages in one app: #route (main) and #near
+  function showView(){
+    var near = location.hash === "#near";
+    $("viewRoute").hidden = near; $("viewNear").hidden = !near;
+    document.title = near ? "Nær meg – Ruteinfo" : "Ruteinfo";
+    window.scrollTo(0,0);
+    setTimeout(function(){ if(near){ if(nmap) nmap.invalidateSize(); } else if(lmap) lmap.invalidateSize(); }, 50);
+  }
+  window.addEventListener("hashchange", showView);
+  showView();
 
   if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
     window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
