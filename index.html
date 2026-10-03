@@ -140,14 +140,9 @@ button.idx{border:0;padding:0;cursor:pointer}
           <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
           <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
           <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
-          <button type="button" data-k="act" aria-pressed="false">Aktiviteter</button>
-        </div>
-      </div>
-      <div class="lbl" id="actCatsRow" hidden>Aktivitetstype (flere kan velges)
-        <div class="seg" id="actCats" role="group" aria-label="Aktivitetstype">
-          <button type="button" data-c="family" aria-pressed="true">Familie</button>
-          <button type="button" data-c="sport" aria-pressed="true">Friluft og sport</button>
-          <button type="button" data-c="culture" aria-pressed="true">Kultur</button>
+          <button type="button" data-c="family" aria-pressed="false">Familie</button>
+          <button type="button" data-c="sport" aria-pressed="false">Friluft og sport</button>
+          <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
           <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
         </div>
       </div>
@@ -212,14 +207,9 @@ button.idx{border:0;padding:0;cursor:pointer}
         <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
         <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
         <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
-        <button type="button" data-k="act" aria-pressed="false">Aktiviteter</button>
-      </div>
-    </div>
-    <div class="lbl" id="nearActCatsRow" hidden style="margin-top:12px">Aktivitetstype (flere kan velges)
-      <div class="seg" id="nearActCats" role="group" aria-label="Aktivitetstype">
-        <button type="button" data-c="family" aria-pressed="true">Familie</button>
-        <button type="button" data-c="sport" aria-pressed="true">Friluft og sport</button>
-        <button type="button" data-c="culture" aria-pressed="true">Kultur</button>
+        <button type="button" data-c="family" aria-pressed="false">Familie</button>
+        <button type="button" data-c="sport" aria-pressed="false">Friluft og sport</button>
+        <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
         <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
       </div>
     </div>
@@ -336,7 +326,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   var KINDS = ["hotel","fuel","ev","act"];
   var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
-  var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:true,sport:true,culture:true,food:false}, sel:{hotel:true,fuel:false,ev:false,act:false},
+  var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,act:false},
     started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
 
   function findCity(txt){
@@ -753,7 +743,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 
 
   // ---------- Nær meg ----------
-  var nearKm = 15, nearBusy = false, nearMarkers = {}, nearSel = { hotel:true, fuel:false, ev:false, act:false }, nearCats = { family:true, sport:true, culture:true, food:false };
+  var nearKm = 15, nearBusy = false, nearMarkers = {}, nearSel = { hotel:true, fuel:false, ev:false, act:false }, nearCats = { family:false, sport:false, culture:false, food:false };
   var COMPASS = ["nord","nordøst","øst","sørøst","sør","sørvest","vest","nordvest"];
   function haversineKm(la1,lo1,la2,lo2){
     var R = 6371, rad = Math.PI/180, dLa = (la2-la1)*rad, dLo = (lo2-lo1)*rad;
@@ -876,41 +866,28 @@ button.idx{border:0;padding:0;cursor:pointer}
     Array.prototype.forEach.call($("nearR").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
   });
   // Multi-select toggles; at least one must stay on
-  function toggleKind(sel, btn){
-    var k = btn.dataset.k, on = !sel[k];
-    if(!on && KINDS.filter(function(x){ return sel[x]; }).length === 1) return false;
-    sel[k] = on; btn.setAttribute("aria-pressed", on?"true":"false");
-    return true;
+  // One row of choices: Hoteller, Bensin, Elbil-lading and the four activity types. At least one must stay on.
+  function togglePick(sel, cats, btn){
+    var isCat = !!btn.dataset.c, key = btn.dataset.c || btn.dataset.k, store = isCat ? cats : sel, on = !store[key];
+    var active = ["hotel","fuel","ev"].filter(function(k){ return sel[k]; }).length + CATS.filter(function(c){ return cats[c]; }).length;
+    if(!on && active === 1) return null;
+    store[key] = on; btn.setAttribute("aria-pressed", on?"true":"false");
+    sel.act = CATS.some(function(c){ return cats[c]; });
+    return { key:key, isCat:isCat, on:on };
   }
-  function toggleCat(cats, btn){
-    var c = btn.dataset.c, on = !cats[c];
-    if(!on && CATS.filter(function(x){ return cats[x]; }).length === 1) return false;
-    cats[c] = on; btn.setAttribute("aria-pressed", on?"true":"false");
-    return true;
-  }
-  function syncCatRows(){ $("actCatsRow").hidden = !state.sel.act; $("nearActCatsRow").hidden = !nearSel.act; }
   $("nearShowSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    if(toggleKind(nearSel, btn)){ syncNearBtn(); syncCatRows(); }
-  });
-  $("nearActCats").addEventListener("click", function(e){
-    var btn = e.target.closest("button"); if(btn) toggleCat(nearCats, btn);
-  });
-  $("actCats").addEventListener("click", function(e){
-    var btn = e.target.closest("button"); if(!btn || !toggleCat(state.cats, btn)) return;
-    if(!state.started || !state.sel.act) return;
-    if(!state.cats[btn.dataset.c]){ renderList(); return; }   // turned off: just hide
-    state.items.act = null; state.err.act = false; state.loading.act = false;   // turned on: new query
-    renderList(); loadKind("act").then(renderList);
+    if(togglePick(nearSel, nearCats, btn)) syncNearBtn();
   });
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    if(!toggleKind(state.sel, btn)) return;
-    syncCatRows();
-    if(!state.started) return;
+    var r = togglePick(state.sel, state.cats, btn); if(!r || !state.started) return;
+    if(r.isCat && r.on){   // a new activity type needs a new query
+      state.items.act = null; state.err.act = false; state.loading.act = false;
+      renderList(); loadKind("act").then(renderList); return;
+    }
     renderList();
-    var k = btn.dataset.k;
-    if(state.sel[k] && !state.items[k] && !state.loading[k]) loadKind(k).then(renderList);
+    if(!r.isCat && state.sel[r.key] && !state.items[r.key] && !state.loading[r.key]) loadKind(r.key).then(renderList);
   });
 
   var busy = false;
