@@ -591,15 +591,15 @@ button.idx{border:0;padding:0;cursor:pointer}
     mapLayer = L.layerGroup().addTo(lmap);
   }
   // Directions: opens the phone's own map app with navigation from the current position
+  function gDirUrl(h){ return "https://www.google.com/maps/dir/?api=1&destination="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate"; }
   function dirUrl(h){
-    return isIOS ? "https://maps.apple.com/?daddr="+h.lat+","+h.lon+"&dirflg=d"
-                 : "https://www.google.com/maps/dir/?api=1&destination="+h.lat+","+h.lon+"&travelmode=driving";
+    return isIOS ? "https://maps.apple.com/?daddr="+h.lat+","+h.lon+"&dirflg=d" : gDirUrl(h);
   }
   // Whole trip Fra -> Til with the chosen place as a stop
   function viaUrl(h){
     if(!state.from || !state.to) return "";
     return "https://www.google.com/maps/dir/?api=1&origin="+state.from[1]+","+state.from[2]+"&destination="+state.to[1]+","+state.to[2]+
-           "&waypoints="+h.lat+","+h.lon+"&travelmode=driving";
+           "&waypoints="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate";
   }
   function mkIcon(kind, n){
     return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":kind==="act"?"tm":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span>"+n+"</span>",
@@ -618,6 +618,7 @@ button.idx{border:0;padding:0;cursor:pointer}
       l.appendChild(a);
     }
     link(dirUrl(h), "Veibeskrivelse");
+    if(isIOS) link(gDirUrl(h), "Google Maps");
     if(h.kind !== "hotel") link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
     else link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
     if(h.web) link(h.web, "Nettside");
@@ -666,6 +667,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     var links = document.createElement("div"); links.className = "links";
     function link(href, txt){ var a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; a.textContent = txt; links.appendChild(a); }
     link(dirUrl(h), "Veibeskrivelse");
+    if(isIOS) link(gDirUrl(h), "Google Maps");
     if(!ctx.pos){
       var via = viaUrl(h); if(via) link(via, "Rute via stedet");
       link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
