@@ -265,7 +265,14 @@ button.idx{border:0;padding:0;cursor:pointer}
   var $ = function(id){ return document.getElementById(id); };
   var NS = "http://www.w3.org/2000/svg";
   var OVERPASS = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
-  var START_RADIUS_KM = 6;
+  // Size of the start place: everything inside this radius from its centre is hidden (hotels, fuel and charging alike)
+  var START_RADIUS = { "oslo":14, "bergen":11, "trondheim":9, "stavanger":9, "sandnes":8, "kristiansand":8, "tromsø":8, "drammen":8,
+    "fredrikstad":8, "sarpsborg":7, "skien":7, "porsgrunn":7, "bodø":7, "ålesund":7, "tønsberg":7, "sandefjord":7, "asker":8, "bærum":9,
+    "sandvika":7, "lillestrøm":7, "ski":6, "hamar":6, "larvik":6, "haugesund":6, "moss":6, "lørenskog":6 };
+  function startRadiusKm(place){
+    var r = START_RADIUS[place[0].toLowerCase()];
+    return r || (place[3]==="tettsted" ? 4 : 6);
+  }
 
   ALL.slice().sort(function(a,b){return a[0].localeCompare(b[0],"nb");}).forEach(function(c){
     var o = document.createElement("option"); o.value = c[0]; o.label = c[3]; $("citylist").appendChild(o);
@@ -439,7 +446,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     if(state.from){
       if(h.city && h.city.toLowerCase() === state.from[0].toLowerCase()) return false;
       var S = state.route.proj(state.from[1], state.from[2]), P = state.route.proj(h.lat, h.lon);
-      if(Math.hypot(P[0]-S[0], P[1]-S[1]) < START_RADIUS_KM) return false;
+      if(Math.hypot(P[0]-S[0], P[1]-S[1]) < startRadiusKm(state.from)) return false;
     }
     return true;
   }
