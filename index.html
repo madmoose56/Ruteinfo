@@ -1,0 +1,708 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Hotellrute</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#0B6B47">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hotellrute">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+/* Layout: one column. Search card, route strip drawn to scale (km along the road, offset from the road), then hotels in the order you pass them. */
+:root{
+  --bg:#EDF0EE; --surface:#FFFFFF; --ink:#16201B; --ink-2:#55635B; --line:#CBD3CE;
+  --accent:#0B6B47; --accent-ink:#FFFFFF; --band:#DCE7E1; --warn:#8A5A00;
+  --font-display:"Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --font-body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#101613; --surface:#18201C; --ink:#E7EEE9; --ink-2:#9AAAA1; --line:#2B3731;
+    --accent:#45C48C; --accent-ink:#06150E; --band:#1F2C26; --warn:#E0B04A; color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;
+  padding-inline:16px;padding-top:calc(env(safe-area-inset-top,0px) + 20px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
+.wrap{max-width:720px;margin-inline:auto;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--font-display);font-weight:700;font-size:40px;line-height:1;letter-spacing:.01em;margin:0}
+.sub{color:var(--ink-2);margin:6px 0 0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+form{display:grid;gap:14px}
+.cities{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:end}
+label,.lbl{display:flex;flex-direction:column;gap:4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);min-width:0}
+input[type=text],input:not([type]){font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0;width:100%;text-transform:none;letter-spacing:0}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.swap{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;height:44px;width:44px;font-size:18px;cursor:pointer}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:40px}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.chk{flex-direction:row;align-items:center;gap:10px;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink);cursor:pointer}
+.chk input{width:20px;height:20px;accent-color:var(--accent);flex:none;margin:0}
+.go{font-family:var(--font-display);font-weight:700;font-size:22px;letter-spacing:.03em;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:12px 16px;cursor:pointer;min-height:48px}
+.go:disabled{opacity:.5;cursor:default}
+.msg{margin:0;font-size:14px;min-height:1.4em}
+.msg.err{color:var(--warn)}
+.chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.chart-head h2,.list-head h2{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.chart{overflow-x:auto}
+svg{display:block;width:100%;height:auto;min-width:420px}
+.note{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
+.list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
+.hotel{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.idx{font-family:var(--font-display);font-weight:700;font-size:20px;background:var(--accent);color:var(--accent-ink);width:34px;height:34px;border-radius:6px;display:grid;place-items:center}
+.hotel h3{font-size:16px;margin:0 0 2px;font-weight:600;overflow-wrap:anywhere}
+.meta{color:var(--ink-2);font-size:13px;margin:0}
+.links{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
+.links a{color:var(--accent);font-weight:600;font-size:14px}
+.empty{color:var(--ink-2);margin:12px 0 0}
+#mapWrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
+#map{height:380px;background:var(--band);z-index:0}
+.legend,.pair{position:absolute;z-index:800;background:rgba(255,255,255,.94);color:#16201B;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-size:14px}
+.legend{top:10px;left:10px;display:flex;gap:16px;align-items:center;padding:8px 14px}
+.legend i{display:inline-block;vertical-align:middle;margin-right:6px}
+.legend .ln{width:22px;height:4px;background:#0B6B47;border-radius:2px}
+.legend .dt{width:12px;height:12px;background:#0B6B47;border-radius:50%}
+.pair{left:50%;transform:translateX(-50%);bottom:26px;padding:8px 16px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis}
+.hm span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#0B6B47;color:#fff;border:2px solid #fff;font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.leaflet-popup-content{font-family:var(--font-body);font-size:14px;margin:12px 14px;color:#16201B}
+.leaflet-popup-content b{display:block;margin-bottom:2px}
+.leaflet-popup-content a{color:#0B6B47;font-weight:600}
+button.idx{border:0;padding:0;cursor:pointer}
+.install{background:var(--band);border-radius:10px;padding:12px 14px;font-size:14px}
+@media (max-width:480px){
+  .cities{grid-template-columns:1fr 1fr}
+  .swap{grid-column:1 / -1;width:100%;height:36px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hotellrute</h1>
+    <p class="sub">Hoteller langs veien mellom to steder i Norge.</p>
+  </header>
+
+  <div class="install" id="install" hidden>
+    Legg appen på hjemskjermen: trykk <b>Del</b>-knappen i Safari og velg <b>Legg til på Hjem-skjerm</b>.
+  </div>
+
+  <section class="card">
+    <form id="form" autocomplete="off">
+      <div class="cities">
+        <label for="from">Fra <input id="from" type="text" list="citylist" value="Oslo"></label>
+        <button type="button" class="swap" id="swap" aria-label="Bytt fra og til">⇄</button>
+        <label for="to">Til <input id="to" type="text" list="citylist" value="Moss"></label>
+      </div>
+      <datalist id="citylist"></datalist>
+      <div class="lbl">Maks avstand fra veien
+        <div class="seg" id="corr" role="group" aria-label="Maks avstand fra veien">
+          <button type="button" data-km="3" aria-pressed="true">3 km</button>
+          <button type="button" data-km="10" aria-pressed="false">10 km</button>
+          <button type="button" data-km="25" aria-pressed="false">25 km</button>
+        </div>
+      </div>
+      <button class="go" id="go" type="submit">Finn hoteller</button>
+      <p class="msg" id="status" role="status"></p>
+    </form>
+  </section>
+
+  <section class="card" id="mapCard">
+    <div id="mapWrap">
+      <div id="map" role="region" aria-label="Kart over ruta"></div>
+      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span><i class="dt"></i>Hotell</span></div>
+      <div class="pair" id="pairLbl">Oslo → Moss</div>
+    </div>
+  </section>
+
+  <section class="card" id="nearCard">
+    <div class="chart-head"><h2>Nær meg</h2></div>
+    <div class="lbl">Radius
+      <div class="seg" id="nearR" role="group" aria-label="Radius">
+        <button type="button" data-km="5" aria-pressed="false">5 km</button>
+        <button type="button" data-km="15" aria-pressed="true">15 km</button>
+        <button type="button" data-km="30" aria-pressed="false">30 km</button>
+      </div>
+    </div>
+    <button class="go" id="nearBtn" type="button" style="margin-top:12px;width:100%">Hoteller nær meg</button>
+    <p class="msg" id="nearStatus" role="status"></p>
+    <ol id="nearList"></ol>
+    <p class="note" id="nearNote" hidden>Avstanden er luftlinje fra posisjonen din. Posisjonen brukes bare i nettleseren din og lagres ikke.</p>
+  </section>
+
+  <section class="card">
+    <div class="chart-head">
+      <h2 id="routeTitle">Oslo – Moss</h2>
+      <span class="mono" id="routeLen"></span>
+    </div>
+    <div class="chart" id="chart"></div>
+    <p class="note" id="routeNote">Venter på søk. Ruta følger veien når veidata er tilgjengelig, ellers rett linje.</p>
+  </section>
+
+  <section id="results" hidden>
+    <div class="list-head">
+      <h2 id="count"></h2>
+      <div class="seg" id="sort" role="group" aria-label="Sorter">
+        <button type="button" data-s="route" aria-pressed="true">Langs ruta</button>
+        <button type="button" data-s="stars" aria-pressed="false">Stjerner</button>
+        <button type="button" data-s="name" aria-pressed="false">Navn</button>
+      </div>
+    </div>
+    <ol id="list"></ol>
+    <p class="empty" id="empty" hidden></p>
+    <p class="note">Hoteldata fra OpenStreetMap-bidragsytere. Priser og ledige rom vises ikke. Sjekk hos hotellet eller på Booking.</p>
+  </section>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function(){
+  "use strict";
+  // name, lat, lon
+  var CITIES = [
+    ["Oslo",59.91,10.75],["Moss",59.43,10.66],["Fredrikstad",59.22,10.93],["Sarpsborg",59.28,11.11],["Halden",59.12,11.39],
+    ["Drammen",59.74,10.20],["Asker",59.83,10.43],["Sandvika",59.89,10.52],["Lillestrøm",59.96,11.05],["Ski",59.72,10.84],
+    ["Ås",59.67,10.79],["Drøbak",59.66,10.63],["Hamar",60.79,11.07],["Lillehammer",61.12,10.47],["Gjøvik",60.80,10.69],
+    ["Elverum",60.88,11.56],["Kongsvinger",60.19,11.99],["Hønefoss",60.17,10.25],["Kongsberg",59.67,9.65],["Notodden",59.56,9.26],
+    ["Larvik",59.05,10.03],["Sandefjord",59.13,10.22],["Tønsberg",59.27,10.41],["Horten",59.42,10.48],["Porsgrunn",59.14,9.66],
+    ["Skien",59.21,9.61],["Kragerø",58.87,9.41],["Arendal",58.46,8.77],["Grimstad",58.34,8.59],["Kristiansand",58.15,8.00],
+    ["Mandal",58.03,7.46],["Lyngdal",58.14,7.07],["Flekkefjord",58.30,6.66],["Egersund",58.45,6.00],["Sandnes",58.85,5.74],
+    ["Stavanger",58.97,5.73],["Haugesund",59.41,5.27],["Leirvik",59.78,5.50],["Odda",60.07,6.55],["Bergen",60.39,5.32],
+    ["Voss",60.63,6.42],["Sogndal",61.23,7.10],["Førde",61.45,5.85],["Stryn",61.91,6.72],["Volda",62.15,6.07],
+    ["Ålesund",62.47,6.15],["Molde",62.74,7.16],["Kristiansund",63.11,7.73],["Trondheim",63.43,10.40],["Steinkjer",64.01,11.50],
+    ["Namsos",64.47,11.50],["Mosjøen",65.84,13.19],["Mo i Rana",66.31,14.14],["Bodø",67.28,14.40],["Svolvær",68.23,14.57],
+    ["Sortland",68.69,15.41],["Narvik",68.44,17.43],["Harstad",68.80,16.54],["Tromsø",69.65,18.96],["Alta",69.97,23.27],
+    ["Hammerfest",70.66,23.68],["Kirkenes",69.73,30.05],["Røros",62.57,11.38],["Tynset",62.28,10.78],["Otta",61.77,9.54],
+    ["Dombås",62.07,9.12],["Geilo",60.53,8.21],["Gol",60.70,8.94],["Fagernes",61.00,9.23],["Svinesund",59.10,11.26],["Bø i Telemark",59.41,9.07]
+  ];
+
+  // Tettsteder (approximate centre coordinates)
+  var TETT = [
+    ["Askim",59.58,11.17],["Mysen",59.56,11.33],["Rakkestad",59.43,11.39],["Råde",59.35,10.86],["Rygge",59.38,10.74],
+    ["Vestby",59.60,10.74],["Son",59.52,10.70],["Spydeberg",59.62,11.08],["Eidsvoll",60.33,11.26],["Jessheim",60.14,11.17],
+    ["Kløfta",60.07,11.14],["Nittedal",60.05,10.87],["Lørenskog",59.92,10.96],["Rælingen",59.93,11.07],["Nesoddtangen",59.84,10.65],
+    ["Fetsund",59.93,11.17],["Årnes",60.13,11.46],["Hokksund",59.77,9.91],["Mjøndalen",59.75,10.02],["Lierbyen",59.79,10.25],
+    ["Slemmestad",59.78,10.49],["Holmestrand",59.49,10.31],["Åsgårdstrand",59.35,10.46],["Stokke",59.22,10.30],["Svelvik",59.61,10.41],
+    ["Sande i Vestfold",59.59,10.22],["Stavern",58.99,10.03],["Brevik",59.05,9.70],["Langesund",59.00,9.74],["Stathelle",59.04,9.69],
+    ["Rjukan",59.88,8.59],["Seljord",59.49,8.64],["Drangedal",59.10,9.07],["Gjerstad",58.90,9.00],["Risør",58.72,9.23],
+    ["Tvedestrand",58.62,8.93],["Lillesand",58.25,8.38],["Birkeland",58.33,8.23],["Evje",58.59,7.81],["Vennesla",58.27,7.97],
+    ["Søgne",58.09,7.80],["Farsund",58.09,6.80],["Hovden",59.55,7.36],["Bryne",58.73,5.65],["Jørpeland",59.02,6.05],
+    ["Sauda",59.65,6.35],["Skudeneshavn",59.15,5.27],["Kopervik",59.28,5.30],["Åkrehamn",59.26,5.18],["Sola",58.89,5.64],
+    ["Randaberg",59.00,5.62],["Hommersåk",58.87,5.82],["Hjelmeland",59.23,6.17],["Eidfjord",60.47,7.07],["Ulvik",60.57,6.91],
+    ["Norheimsund",60.37,6.14],["Os i Hordaland",60.19,5.47],["Straume",60.35,5.12],["Knarvik",60.54,5.28],["Kleppestø",60.40,5.22],
+    ["Flåm",60.86,7.11],["Lærdal",61.10,7.48],["Aurland",60.91,7.19],["Balestrand",61.21,6.53],["Måløy",61.94,5.11],
+    ["Nordfjordeid",61.91,6.00],["Florø",61.60,5.03],["Sandane",61.77,6.22],["Leikanger",61.18,6.82],["Vik i Sogn",61.09,6.58],
+    ["Fjærland",61.42,6.76],["Gaupne",61.38,7.30],["Husnes",59.86,5.77],["Rosendal",59.99,6.02],["Svortland",59.78,5.20],
+    ["Ørsta",62.20,6.13],["Hareid",62.37,6.00],["Ulsteinvik",62.34,5.85],["Fosnavåg",62.31,5.64],["Sunndalsøra",62.67,8.56],
+    ["Surnadal",62.97,8.72],["Åndalsnes",62.57,7.69],["Eide",62.90,7.45],["Elnesvågen",62.84,7.07],["Sykkylven",62.39,6.58],
+    ["Stranda",62.31,6.95],["Geiranger",62.10,7.21],["Valldal",62.28,7.27],["Orkanger",63.31,9.85],["Melhus",63.29,10.28],
+    ["Stjørdal",63.47,10.92],["Levanger",63.75,11.30],["Verdal",63.79,11.48],["Oppdal",62.60,9.69],["Støren",63.03,10.28],
+    ["Berkåk",62.83,9.99],["Meråker",63.41,11.75],["Brekstad",63.69,9.66],["Fillan",63.50,9.23],["Grong",64.46,12.31],
+    ["Rørvik",64.86,11.24],["Brønnøysund",65.47,12.21],["Sandnessjøen",66.02,12.63],["Fauske",67.26,15.39],["Rognan",67.10,15.39],
+    ["Leknes",68.15,13.61],["Stokmarknes",68.57,14.91],["Andenes",69.32,16.12],["Finnsnes",69.23,17.98],["Bardufoss",69.06,18.54],
+    ["Setermoen",68.86,18.35],["Skjervøy",70.03,20.98],["Karasjok",69.47,25.51],["Kautokeino",69.01,23.04],["Vadsø",70.07,29.75],
+    ["Vardø",70.37,31.11],["Honningsvåg",70.98,25.97],["Lakselv",70.05,24.97],["Båtsfjord",70.63,29.72],["Berlevåg",70.86,29.09],
+    ["Mehamn",71.03,27.85],["Bjerkvik",68.55,17.55],["Ballangen",68.34,16.83],["Ørnes",66.86,13.69],["Hemnesberget",66.22,13.60],
+    ["Korgen",66.07,13.82],["Trofors",65.54,13.35],["Ringebu",61.52,10.14],["Fåvang",61.46,10.19],["Tretten",61.31,10.30],
+    ["Vinstra",61.60,9.74],["Lom",61.84,8.57],["Vågå",61.88,9.10],["Skjåk",61.88,8.38],["Folldal",62.14,9.99],
+    ["Alvdal",62.11,10.63],["Tolga",62.41,11.00],["Os i Østerdalen",62.50,11.22],["Rena",61.14,11.37],["Koppang",61.58,11.05],
+    ["Trysil",61.31,12.27],["Flisa",60.62,12.01],["Brumunddal",60.88,10.93],["Moelv",60.93,10.70],["Stange",60.70,11.19],
+    ["Løten",60.82,11.35],["Raufoss",60.72,10.62],["Lena",60.67,10.81],["Beitostølen",61.25,8.91],["Hemsedal",60.86,8.58],
+    ["Ål",60.63,8.57],["Flå",60.43,9.46],["Nesbyen",60.57,9.11],["Brandbu",60.41,10.50],["Jevnaker",60.24,10.38],
+    ["Dokka",60.83,10.07]
+  ];
+  var ALL = CITIES.map(function(c){ return [c[0],c[1],c[2],"by"]; });
+  (function(){
+    var have = {}; ALL.forEach(function(c){ have[c[0].toLowerCase()] = 1; });
+    TETT.forEach(function(c){ if(!have[c[0].toLowerCase()]){ have[c[0].toLowerCase()] = 1; ALL.push([c[0],c[1],c[2],"tettsted"]); } });
+  })();
+  var BY = {};
+  ALL.forEach(function(c){ BY[c[0].toLowerCase()] = c; });
+  var $ = function(id){ return document.getElementById(id); };
+  var NS = "http://www.w3.org/2000/svg";
+  var OVERPASS = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+  var START_RADIUS_KM = 6;
+
+  ALL.slice().sort(function(a,b){return a[0].localeCompare(b[0],"nb");}).forEach(function(c){
+    var o = document.createElement("option"); o.value = c[0]; o.label = c[3]; $("citylist").appendChild(o);
+  });
+
+  var isStandalone = window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(isIOS && !isStandalone) $("install").hidden = false;
+
+  var state = { from:null, to:null, route:null, hotels:null, corridor:3, sort:"route", routeKind:"" };
+
+  function findCity(txt){
+    var q = (txt||"").trim().toLowerCase();
+    if(!q) return null;
+    if(BY[q]) return BY[q];
+    var keys = Object.keys(BY);
+    for(var i=0;i<keys.length;i++){ if(keys[i].indexOf(q)===0) return BY[keys[i]]; }
+    for(var j=0;j<keys.length;j++){ if(keys[j].indexOf(q)>=0) return BY[keys[j]]; }
+    return null;
+  }
+
+  function fmtKm(x){ return x.toLocaleString("nb-NO",{maximumFractionDigits:1,minimumFractionDigits:x<10?1:0}); }
+
+  // Route geometry in local flat km
+  function makeProj(lat0){
+    var kx = 111.32*Math.cos(lat0*Math.PI/180), ky = 110.57;
+    return function(lat,lon){ return [lon*kx, lat*ky]; };
+  }
+  function buildRoute(latlons, kind){
+    var lat0 = latlons.reduce(function(s,p){return s+p[0];},0)/latlons.length;
+    var proj = makeProj(lat0);
+    var pts = latlons.map(function(p){ return proj(p[0],p[1]); });
+    var cum = [0];
+    for(var i=1;i<pts.length;i++) cum.push(cum[i-1]+Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]));
+    return { latlons:latlons, proj:proj, pts:pts, cum:cum, len:cum[cum.length-1], kind:kind };
+  }
+  function place(route, lat, lon){
+    var P = route.proj(lat,lon), best = Infinity, bestAlong = 0, bestSide = 0;
+    for(var i=1;i<route.pts.length;i++){
+      var a = route.pts[i-1], b = route.pts[i];
+      var dx = b[0]-a[0], dy = b[1]-a[1], l2 = dx*dx+dy*dy;
+      var t = l2 ? ((P[0]-a[0])*dx + (P[1]-a[1])*dy)/l2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var qx = a[0]+dx*t, qy = a[1]+dy*t;
+      var d = Math.hypot(P[0]-qx, P[1]-qy);
+      if(d < best){
+        best = d; bestAlong = route.cum[i-1] + Math.sqrt(l2)*t;
+        bestSide = (dx*(P[1]-a[1]) - dy*(P[0]-a[0])) / (Math.sqrt(l2)||1);
+      }
+    }
+    return { along:bestAlong, off:best, signed: bestSide<0?-best:best };
+  }
+  function sampleRoute(route, stepKm, maxPts){
+    var out = [route.latlons[0]], next = stepKm;
+    for(var i=1;i<route.pts.length;i++){
+      if(route.cum[i] >= next){ out.push(route.latlons[i]); next += stepKm; }
+    }
+    var last = route.latlons[route.latlons.length-1];
+    if(out[out.length-1] !== last) out.push(last);
+    if(out.length > maxPts){
+      var k = Math.ceil(out.length/maxPts), thin = [];
+      for(var j=0;j<out.length;j+=k) thin.push(out[j]);
+      if(thin[thin.length-1] !== last) thin.push(last);
+      out = thin;
+    }
+    return out;
+  }
+
+  function fetchTimeout(url, opts, ms){
+    var ctl = new AbortController();
+    var t = setTimeout(function(){ ctl.abort(); }, ms);
+    opts = opts || {}; opts.signal = ctl.signal;
+    return fetch(url, opts).then(function(r){ clearTimeout(t); return r; }, function(e){ clearTimeout(t); throw e; });
+  }
+
+  function getRoadRoute(a, b){
+    var url = "https://router.project-osrm.org/route/v1/driving/"+a[2]+","+a[1]+";"+b[2]+","+b[1]+"?overview=full&geometries=geojson";
+    return fetchTimeout(url, null, 12000).then(function(r){
+      if(!r.ok) throw new Error("osrm "+r.status);
+      return r.json();
+    }).then(function(j){
+      var c = j && j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates;
+      if(!c || c.length < 2) throw new Error("no route");
+      return buildRoute(c.map(function(p){ return [p[1],p[0]]; }), "vei");
+    });
+  }
+  function getStraightRoute(a, b){ return buildRoute([[a[1],a[2]],[b[1],b[2]]], "linje"); }
+
+  function overpassQuery(route, radiusKm){
+    var pts = sampleRoute(route, Math.max(1.5, radiusKm*0.8), 120);
+    var coords = pts.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
+    return "[out:json][timeout:25];nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"](around:"+Math.round(radiusKm*1000)+","+coords+");out center tags 600;";
+  }
+  function runOverpass(q, i){
+    i = i||0;
+    if(i >= OVERPASS.length) return Promise.reject(new Error("overpass"));
+    return fetchTimeout(OVERPASS[i], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 30000)
+      .then(function(r){ if(!r.ok) throw new Error("overpass "+r.status); return r.json(); })
+      .catch(function(){ return runOverpass(q, i+1); });
+  }
+
+  var TYPE_NB = { hotel:"Hotell", motel:"Motell", guest_house:"Gjestehus", hostel:"Vandrerhjem", apartment:"Leiligheter" };
+  function toHotels(json, route){
+    var seen = {}, out = [];
+    (json.elements||[]).forEach(function(e){
+      var t = e.tags||{}, la = e.lat!=null?e.lat:(e.center&&e.center.lat), lo = e.lon!=null?e.lon:(e.center&&e.center.lon);
+      if(la==null || lo==null || !t.name) return;
+      var key = e.type+e.id; if(seen[key]) return; seen[key] = 1;
+      var pl = place(route, la, lo);
+      var st = parseInt(String(t.stars||"").replace(/[^0-9]/g,""),10);
+      var city = t["addr:city"] || "";
+      var addr = [t["addr:street"] ? t["addr:street"]+(t["addr:housenumber"]?" "+t["addr:housenumber"]:"") : "", city].filter(Boolean).join(", ");
+      var web = t.website || t["contact:website"] || "";
+      if(web && !/^https?:\/\//i.test(web)) web = "https://"+web;
+      if(web && !/^https:\/\//i.test(web)) web = "";
+      var ph = t.phone || t["contact:phone"] || "";
+      out.push({ id:key, name:t.name, type:TYPE_NB[t.tourism]||"", stars:isNaN(st)||st<1||st>5?0:st, city:city, addr:addr,
+        lat:la, lon:lo, web:web, phone:ph, along:pl.along, off:pl.off, signed:pl.signed });
+    });
+    return out;
+  }
+
+  function visibleHotels(){
+    if(!state.hotels) return [];
+    var skip = !!state.from;   // hotels in the start city/town are never shown
+    var sproj = skip ? state.route.proj : null;
+    var S = skip ? sproj(state.from[1], state.from[2]) : null;
+    return state.hotels.filter(function(h){
+      if(h.off > state.corridor + 0.05) return false;
+      if(skip){
+        if(h.city && h.city.toLowerCase() === state.from[0].toLowerCase()) return false;
+        var P = sproj(h.lat, h.lon);
+        if(Math.hypot(P[0]-S[0], P[1]-S[1]) < START_RADIUS_KM) return false;
+      }
+      return true;
+    });
+  }
+
+  function el(name, attrs, text){
+    var e = document.createElementNS(NS,name);
+    for(var k in attrs) e.setAttribute(k, attrs[k]);
+    if(text!=null) e.textContent = text;
+    return e;
+  }
+  function niceStep(L){
+    var raw = L/6, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw/p;
+    return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p;
+  }
+
+  function drawChart(){
+    var host = $("chart"); host.textContent = "";
+    var a = state.from, b = state.to, route = state.route;
+    if(!a||!b||!route) return;
+    var L = route.len, C = state.corridor;
+    var W = 640, H = 190, ml = 46, mr = 18, mt = 22, mb = 40;
+    var iw = W-ml-mr, ih = H-mt-mb, cy = mt+ih/2;
+    var xs = function(km){ return ml + (km/L)*iw; };
+    var ys = function(off){ return cy - (off/C)*(ih/2); };
+    var svg = el("svg",{viewBox:"0 0 "+W+" "+H, role:"img", "aria-label":"Hoteller langs ruta fra "+a[0]+" til "+b[0]});
+    svg.appendChild(el("rect",{x:ml,y:mt,width:iw,height:ih,fill:"var(--band)",rx:4}));
+    var step = niceStep(L);
+    for(var k=0;k<=L+0.001;k+=step){
+      var x = xs(k);
+      svg.appendChild(el("line",{x1:x,x2:x,y1:mt+ih,y2:mt+ih+5,stroke:"var(--ink-2)","stroke-width":1}));
+      svg.appendChild(el("text",{x:x,y:mt+ih+18,"text-anchor":"middle",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},String(Math.round(k*10)/10)));
+    }
+    svg.appendChild(el("text",{x:ml+iw,y:H-4,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"system-ui, sans-serif"},"km fra "+a[0]));
+    svg.appendChild(el("text",{x:ml-6,y:mt+9,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},C+" km"));
+    svg.appendChild(el("text",{x:ml-6,y:mt+ih,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},C+" km"));
+    svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--ink)","stroke-width":3,"stroke-linecap":"round"}));
+    svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--band)","stroke-width":1,"stroke-dasharray":"7 7"}));
+    svg.appendChild(el("text",{x:ml,y:mt-7,"text-anchor":"start",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},a[0]));
+    svg.appendChild(el("text",{x:ml+iw,y:mt-7,"text-anchor":"end",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},b[0]));
+    var byRoute = visibleHotels().sort(function(p,q){return p.along-q.along;});
+    byRoute.forEach(function(h,i){
+      var cx = xs(h.along), cyy = ys(Math.max(-C,Math.min(C,h.signed)));
+      svg.appendChild(el("circle",{cx:cx,cy:cyy,r:8,fill:"var(--accent)",stroke:"var(--surface)","stroke-width":1.5}));
+      svg.appendChild(el("text",{x:cx,y:cyy+3.5,"text-anchor":"middle",fill:"var(--accent-ink)","font-size":9.5,"font-weight":600,"font-family":"ui-monospace, monospace"},String(i+1)));
+    });
+    host.appendChild(svg);
+  }
+
+
+  var lmap = null, mapLayer = null, markerById = {}, fitPending = true, mapMode = "route";
+  function initMap(){
+    if(typeof L === "undefined"){ $("mapCard").hidden = true; return; }
+    lmap = L.map("map", { scrollWheelZoom:false }).setView([64,12],4);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19,
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(lmap);
+    mapLayer = L.layerGroup().addTo(lmap);
+  }
+  function popupFor(h, near){
+    var d = document.createElement("div");
+    var b = document.createElement("b"); b.textContent = h.name; d.appendChild(b);
+    var bits = [];
+    if(h.type) bits.push(h.type); if(h.stars) bits.push(h.stars+" stjerner"); if(h.addr) bits.push(h.addr);
+    if(bits.length){ var p = document.createElement("div"); p.textContent = bits.join(" · "); d.appendChild(p); }
+    var q = document.createElement("div"); q.textContent = near ? fmtDist(h.dist)+" mot "+h.dir : fmtKm(h.off)+" km fra veien"; d.appendChild(q);
+    var l = document.createElement("div"); l.style.marginTop = "6px";
+    var a1 = document.createElement("a"); a1.href = "https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:""));
+    a1.target = "_blank"; a1.rel = "noopener noreferrer"; a1.textContent = "Søk på Booking"; l.appendChild(a1);
+    if(h.web){ l.appendChild(document.createTextNode("  ")); var a2 = document.createElement("a"); a2.href = h.web; a2.target = "_blank"; a2.rel = "noopener noreferrer"; a2.textContent = "Nettside"; l.appendChild(a2); }
+    d.appendChild(l);
+    return d;
+  }
+  function updateMap(){
+    if(mapMode === "near") return;
+    if(!lmap || !state.route || !state.from) return;
+    $("pairLbl").textContent = state.from[0]+" → "+state.to[0];
+    mapLayer.clearLayers(); markerById = {};
+    var ll = state.route.latlons.map(function(p){ return [p[0],p[1]]; });
+    L.polyline(ll, { color:"#0B6B47", weight:6, opacity:.95, lineJoin:"round" }).addTo(mapLayer);
+    var ends = [[state.from, ll[0]],[state.to, ll[ll.length-1]]];
+    ends.forEach(function(e){
+      L.circleMarker(e[1], { radius:7, color:"#fff", weight:2, fillColor:"#16201B", fillOpacity:1 })
+        .bindTooltip(e[0][0], { permanent:true, direction:"top", offset:[0,-6] }).addTo(mapLayer);
+    });
+    var pts = ll.slice();
+    visibleHotels().sort(function(p,q){return p.along-q.along;}).forEach(function(h,i){
+      var m = L.marker([h.lat,h.lon], { icon:L.divIcon({ className:"hm", html:"<span>"+(i+1)+"</span>", iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] }), title:h.name });
+      m.bindPopup(popupFor(h)); m.addTo(mapLayer); markerById[h.id] = m; pts.push([h.lat,h.lon]);
+    });
+    if(fitPending){ fitPending = false; lmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:13 }); }
+  }
+
+  function renderList(){
+    var res = $("results"), list = $("list"), empty = $("empty");
+    if(!state.hotels){ res.hidden = true; return; }
+    res.hidden = false; list.textContent = "";
+    var shown = visibleHotels();
+    var byRoute = shown.slice().sort(function(p,q){return p.along-q.along;});
+    var idx = {}; byRoute.forEach(function(h,i){ idx[h.id] = i+1; });
+    var arr = shown.slice();
+    if(state.sort==="stars") arr.sort(function(p,q){ return q.stars-p.stars || p.along-q.along; });
+    else if(state.sort==="name") arr.sort(function(p,q){ return p.name.localeCompare(q.name,"nb"); });
+    else arr = byRoute;
+    $("count").textContent = shown.length + (shown.length===1?" hotell":" hoteller");
+    if(!shown.length){
+      empty.hidden = false;
+      empty.textContent = "Ingen overnattingssteder innenfor "+state.corridor+" km fra ruta. Prøv en bredere avstand.";
+    } else empty.hidden = true;
+    arr.forEach(function(h){
+      var li = document.createElement("li"); li.className = "hotel";
+      var i = document.createElement("button"); i.type = "button"; i.className = "idx"; i.textContent = idx[h.id];
+      i.setAttribute("aria-label","Vis "+h.name+" på kartet");
+      i.addEventListener("click", function(){
+        var mk = markerById[h.id]; if(!mk || !lmap) return;
+        $("mapCard").scrollIntoView({ behavior:"smooth", block:"center" });
+        lmap.setView([h.lat,h.lon], Math.max(lmap.getZoom(),13)); mk.openPopup();
+      });
+      var mid = document.createElement("div");
+      var t = document.createElement("h3"); t.textContent = h.name;
+      var m = document.createElement("p"); m.className = "meta";
+      var parts = [];
+      if(h.type) parts.push(h.type);
+      if(h.stars) parts.push(h.stars+" stjerner");
+      if(h.addr) parts.push(h.addr);
+      m.textContent = parts.join(" · ");
+      var r = document.createElement("p"); r.className = "meta mono";
+      r.textContent = fmtKm(h.along)+" km fra "+state.from[0]+" · "+fmtKm(h.off)+" km fra veien";
+      mid.appendChild(t); if(parts.length) mid.appendChild(m); mid.appendChild(r);
+      var links = document.createElement("div"); links.className = "links";
+      var gm = document.createElement("a");
+      gm.href = "https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon;
+      gm.target = "_blank"; gm.rel = "noopener noreferrer"; gm.textContent = "Åpne i OpenStreetMap";
+      links.appendChild(gm);
+      var bk = document.createElement("a");
+      bk.href = "https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:""));
+      bk.target = "_blank"; bk.rel = "noopener noreferrer"; bk.textContent = "Søk på Booking";
+      links.appendChild(bk);
+      if(h.web){ var w = document.createElement("a"); w.href = h.web; w.target = "_blank"; w.rel = "noopener noreferrer"; w.textContent = "Nettside"; links.appendChild(w); }
+      mid.appendChild(links);
+      li.appendChild(i); li.appendChild(mid); list.appendChild(li);
+    });
+    drawChart();
+    updateMap();
+  }
+
+  function cityPair(){
+    var a = findCity($("from").value), b = findCity($("to").value);
+    if(!a || !b) return { error: "Fant ikke «"+(!a?$("from").value:$("to").value).trim()+"». Velg en by eller et tettsted fra listen." };
+    if(a===b) return { error: "Velg to forskjellige byer." };
+    return { a:a, b:b };
+  }
+
+  function showRouteHeader(){
+    $("routeTitle").textContent = state.from[0]+" – "+state.to[0];
+    if(state.route){
+      $("routeLen").textContent = "ca. "+fmtKm(state.route.len)+" km "+(state.route.kind==="vei"?"langs veien":"luftlinje");
+      $("routeNote").textContent = state.route.kind==="vei"
+        ? "Avstandene er målt fra den kjørte veien. Hoteller i startstedet ("+state.from[0]+") tas ikke med."
+        : "Fikk ikke veidata, så ruta er en rett linje og avstandene er luftlinje. Hoteller i startstedet ("+state.from[0]+") tas ikke med.";
+    }
+  }
+
+
+  // ---------- Hoteller nær meg ----------
+  var nearKm = 15, nearBusy = false, nearMarkers = {};
+  var COMPASS = ["nord","nordøst","øst","sørøst","sør","sørvest","vest","nordvest"];
+  function haversineKm(la1,lo1,la2,lo2){
+    var R = 6371, rad = Math.PI/180, dLa = (la2-la1)*rad, dLo = (lo2-lo1)*rad;
+    var a = Math.sin(dLa/2)*Math.sin(dLa/2) + Math.cos(la1*rad)*Math.cos(la2*rad)*Math.sin(dLo/2)*Math.sin(dLo/2);
+    return 2*R*Math.asin(Math.min(1,Math.sqrt(a)));
+  }
+  function bearingName(la1,lo1,la2,lo2){
+    var rad = Math.PI/180, dLo = (lo2-lo1)*rad;
+    var y = Math.sin(dLo)*Math.cos(la2*rad);
+    var x = Math.cos(la1*rad)*Math.sin(la2*rad) - Math.sin(la1*rad)*Math.cos(la2*rad)*Math.cos(dLo);
+    var b = (Math.atan2(y,x)/rad + 360) % 360;
+    return COMPASS[Math.round(b/45) % 8];
+  }
+  function fmtDist(km){ return km < 1 ? Math.round(km*1000/10)*10+" m" : fmtKm(km)+" km"; }
+
+  function nearError(e){
+    if(e && e.code === 1) return "Posisjon er avslått. På iPhone: Innstillinger → Personvern og sikkerhet → Stedstjenester → Safari (eller Hotellrute) → «Mens du bruker appen».";
+    if(e && e.code === 3) return "Fikk ikke posisjonen i tide. Gå gjerne ut eller koble til Wi-Fi, og prøv igjen.";
+    return "Fikk ikke tak i posisjonen din. Prøv igjen om litt.";
+  }
+
+  function renderNear(pos, acc, hotels){
+    var list = $("nearList"); list.textContent = "";
+    hotels.forEach(function(h, i){
+      var li = document.createElement("li"); li.className = "hotel";
+      var n = document.createElement("button"); n.type = "button"; n.className = "idx"; n.textContent = i+1;
+      n.setAttribute("aria-label","Vis "+h.name+" på kartet");
+      n.addEventListener("click", function(){
+        var mk = nearMarkers[h.id]; if(!mk || !lmap) return;
+        $("mapCard").scrollIntoView({ behavior:"smooth", block:"center" });
+        lmap.setView([h.lat,h.lon], Math.max(lmap.getZoom(),14)); mk.openPopup();
+      });
+      var mid = document.createElement("div");
+      var t = document.createElement("h3"); t.textContent = h.name; mid.appendChild(t);
+      var bits = []; if(h.type) bits.push(h.type); if(h.stars) bits.push(h.stars+" stjerner"); if(h.addr) bits.push(h.addr);
+      if(bits.length){ var m = document.createElement("p"); m.className = "meta"; m.textContent = bits.join(" · "); mid.appendChild(m); }
+      var r = document.createElement("p"); r.className = "meta mono"; r.textContent = fmtDist(h.dist)+" mot "+h.dir; mid.appendChild(r);
+      var links = document.createElement("div"); links.className = "links";
+      var d = document.createElement("a");
+      d.href = "https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route="+encodeURIComponent(pos[0]+","+pos[1]+";"+h.lat+","+h.lon);
+      d.target = "_blank"; d.rel = "noopener noreferrer"; d.textContent = "Veibeskrivelse"; links.appendChild(d);
+      var bk = document.createElement("a");
+      bk.href = "https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:""));
+      bk.target = "_blank"; bk.rel = "noopener noreferrer"; bk.textContent = "Søk på Booking"; links.appendChild(bk);
+      if(h.web){ var w = document.createElement("a"); w.href = h.web; w.target = "_blank"; w.rel = "noopener noreferrer"; w.textContent = "Nettside"; links.appendChild(w); }
+      mid.appendChild(links);
+      li.appendChild(n); li.appendChild(mid); list.appendChild(li);
+    });
+    $("nearNote").hidden = false;
+  }
+
+  function drawNearMap(pos, acc, hotels){
+    if(!lmap) return;
+    mapMode = "near"; mapLayer.clearLayers(); nearMarkers = {};
+    $("pairLbl").textContent = "Nær meg · "+nearKm+" km";
+    if(acc && acc < 5000) L.circle(pos, { radius:acc, color:"#2563EB", weight:1, fillColor:"#2563EB", fillOpacity:.12 }).addTo(mapLayer);
+    L.circleMarker(pos, { radius:8, color:"#fff", weight:3, fillColor:"#2563EB", fillOpacity:1 }).bindTooltip("Du er her", { permanent:true, direction:"top", offset:[0,-8] }).addTo(mapLayer);
+    var pts = [pos];
+    hotels.forEach(function(h,i){
+      var m = L.marker([h.lat,h.lon], { icon:L.divIcon({ className:"hm", html:"<span>"+(i+1)+"</span>", iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] }), title:h.name });
+      m.bindPopup(popupFor(h, true));
+      m.addTo(mapLayer); nearMarkers[h.id] = m; if(i < 12) pts.push([h.lat,h.lon]);
+    });
+    lmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
+  }
+
+  function nearSearch(){
+    var st = $("nearStatus"); st.className = "msg"; st.textContent = "";
+    if(nearBusy) return;
+    if(!navigator.geolocation){ st.className = "msg err"; st.textContent = "Nettleseren din støtter ikke posisjon."; return; }
+    nearBusy = true; $("nearBtn").disabled = true; st.textContent = "Henter posisjonen din…";
+    navigator.geolocation.getCurrentPosition(function(p){
+      var pos = [p.coords.latitude, p.coords.longitude], acc = p.coords.accuracy;
+      st.textContent = "Søker etter hoteller innenfor "+nearKm+" km…";
+      var q = "[out:json][timeout:25];nwr[\"tourism\"~\"^(hotel|motel|guest_house|hostel|apartment)$\"][\"name\"](around:"+(nearKm*1000)+","+pos[0].toFixed(5)+","+pos[1].toFixed(5)+");out center tags 400;";
+      runOverpass(q).then(function(json){
+        var seen = {}, hotels = [];
+        (json.elements||[]).forEach(function(e){
+          var t = e.tags||{}, la = e.lat!=null?e.lat:(e.center&&e.center.lat), lo = e.lon!=null?e.lon:(e.center&&e.center.lon);
+          if(la==null||lo==null||!t.name) return;
+          var key = e.type+e.id; if(seen[key]) return; seen[key] = 1;
+          var stn = parseInt(String(t.stars||"").replace(/[^0-9]/g,""),10);
+          var city = t["addr:city"] || "";
+          var web = t.website || t["contact:website"] || "";
+          if(web && !/^https?:\/\//i.test(web)) web = "https://"+web;
+          if(web && !/^https:\/\//i.test(web)) web = "";
+          hotels.push({ id:key, name:t.name, type:TYPE_NB[t.tourism]||"", stars:isNaN(stn)||stn<1||stn>5?0:stn, city:city,
+            addr:[t["addr:street"]?t["addr:street"]+(t["addr:housenumber"]?" "+t["addr:housenumber"]:""):"", city].filter(Boolean).join(", "),
+            web:web, lat:la, lon:lo, dist:haversineKm(pos[0],pos[1],la,lo), dir:bearingName(pos[0],pos[1],la,lo) });
+        });
+        hotels.sort(function(a,b){ return a.dist-b.dist; });
+        hotels = hotels.slice(0,40);
+        if(!hotels.length){
+          $("nearList").textContent = ""; $("nearNote").hidden = true;
+          st.className = "msg err"; st.textContent = "Fant ingen overnattingssteder innenfor "+nearKm+" km. Prøv en større radius.";
+          if(lmap){ mapMode = "near"; mapLayer.clearLayers(); L.circleMarker(pos,{radius:8,color:"#fff",weight:3,fillColor:"#2563EB",fillOpacity:1}).addTo(mapLayer); lmap.setView(pos,10); }
+          return;
+        }
+        st.textContent = "Nærmeste: "+hotels[0].name+", "+fmtDist(hotels[0].dist)+" mot "+hotels[0].dir+".";
+        renderNear(pos, acc, hotels); drawNearMap(pos, acc, hotels);
+      }).catch(function(){
+        st.className = "msg err"; st.textContent = navigator.onLine === false ? "Du er uten nett. Koble til og prøv igjen." : "Fikk ikke hentet hoteller akkurat nå. Prøv igjen om litt.";
+      }).then(function(){ nearBusy = false; $("nearBtn").disabled = false; });
+    }, function(e){
+      st.className = "msg err"; st.textContent = nearError(e);
+      nearBusy = false; $("nearBtn").disabled = false;
+    }, { enableHighAccuracy:true, timeout:15000, maximumAge:60000 });
+  }
+  $("nearBtn").addEventListener("click", nearSearch);
+  $("nearR").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if(!btn) return;
+    nearKm = parseInt(btn.dataset.km,10);
+    Array.prototype.forEach.call($("nearR").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
+  });
+
+  var busy = false;
+  function search(){
+    var st = $("status"); st.className = "msg"; st.textContent = "";
+    mapMode = "route"; fitPending = true;
+    var p = cityPair();
+    if(p.error){ st.className = "msg err"; st.textContent = p.error; return; }
+    if(busy) return;
+    busy = true; $("go").disabled = true;
+    state.from = p.a; state.to = p.b; state.hotels = null; $("results").hidden = true;
+    $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
+    st.textContent = "Henter veien…";
+    getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
+      state.route = route; showRouteHeader(); drawChart(); fitPending = true; updateMap();
+      st.textContent = "Henter hoteller langs ruta…";
+      return runOverpass(overpassQuery(route, state.corridor)).then(function(json){
+        state.hotels = toHotels(json, route); fitPending = true;
+        st.textContent = state.hotels.length ? "" : "Fant ingen overnattingssteder i OpenStreetMap langs denne ruta.";
+        renderList();
+      });
+    }).catch(function(e){
+      st.className = "msg err";
+      st.textContent = navigator.onLine === false
+        ? "Du er uten nett. Koble til og prøv igjen."
+        : "Fikk ikke hentet hoteller akkurat nå. Prøv igjen om litt.";
+    }).then(function(){ busy = false; $("go").disabled = false; });
+  }
+
+  $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
+  $("swap").addEventListener("click", function(){
+    var f = $("from"), t = $("to"), x = f.value; f.value = t.value; t.value = x;
+    if(state.hotels) search();
+  });
+  $("corr").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if(!btn) return;
+    var km = parseInt(btn.dataset.km,10), wider = km > state.corridor;
+    state.corridor = km;
+    Array.prototype.forEach.call($("corr").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
+    if(state.hotels && wider) search();   // wider corridor needs a new query
+    else if(state.hotels) renderList();
+    else drawChart();
+  });
+  $("sort").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if(!btn) return;
+    state.sort = btn.dataset.s;
+    Array.prototype.forEach.call($("sort").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
+    renderList();
+  });
+
+  // Initial header and empty chart for the default pair
+  var p0 = cityPair();
+  if(!p0.error){
+    state.from = p0.a; state.to = p0.b; state.route = getStraightRoute(p0.a, p0.b);
+    showRouteHeader(); $("routeNote").textContent = "Trykk Finn hoteller. Ruta følger veien når veidata er tilgjengelig.";
+    $("routeLen").textContent = ""; drawChart(); initMap(); updateMap();
+  } else initMap();
+
+  if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
+    window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
+  }
+})();
+</script>
+</body>
+</html>
