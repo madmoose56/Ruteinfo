@@ -64,8 +64,13 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .links{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
 .links a{color:var(--accent);font-weight:600;font-size:14px}
 .empty{color:var(--ink-2);margin:12px 0 0}
-#mapWrap,#nearMapWrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line)}
-#map,#nmap{height:380px;background:var(--band);z-index:0}
+.mapbox{display:flex;gap:12px;align-items:flex-start}
+.mapbox .side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:12px;font-size:14px}
+.mapbox .side .legend,.mapbox .side .pair{position:static;transform:none;width:auto;max-width:none;box-shadow:none;background:var(--band);flex-direction:column;align-items:flex-start;flex-wrap:nowrap;gap:8px;padding:10px 12px;border-radius:10px}
+.mapbox .side .pair{font-size:12px;white-space:normal;letter-spacing:.1em;overflow:visible}
+.mapbox .side .pair:empty{display:none}
+#mapWrap,#nearMapWrap{position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--line);flex:none;width:50vw;height:50vw;max-width:50vw}
+#map,#nmap{height:100%;background:var(--band);z-index:0}
 .legend,.pair{position:absolute;z-index:800;background:rgba(255,255,255,.94);color:#16201B;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-size:14px}
 .legend{top:10px;left:50%;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;align-items:center;padding:8px 14px;max-width:calc(100% - 20px);width:max-content}
 .legend span{white-space:nowrap}
@@ -107,13 +112,12 @@ button.idx{border:0;padding:0;cursor:pointer}
   .cities input{padding-left:9px;padding-right:9px}
 }
 #errBox{background:#FDE8E8;color:#7A1111;border:1px solid #E5A3A3;border-radius:8px;padding:10px 12px;font-size:13px;word-break:break-word}
-/* Big scroll slider on the right edge */
-#scrollSlider{display:none;position:fixed;left:4px;top:calc(env(safe-area-inset-top,0px) + 84px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);width:20px;z-index:3000;pointer-events:none}
-#scrollSlider::before{content:"";position:absolute;left:8px;top:0;bottom:0;width:3px;border-radius:2px;background:rgba(20,66,58,.2)}
-#sbThumb{position:absolute;left:0;top:0;will-change:transform;-webkit-user-select:none;user-select:none;width:20px;height:46px;border-radius:10px;background:#0B6B47;border:1.5px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);pointer-events:auto;touch-action:none;cursor:grab}
-#sbThumb::before{content:"";position:absolute;left:5px;right:5px;top:50%;height:13px;transform:translateY(-50%);background:repeating-linear-gradient(to bottom,rgba(255,255,255,.85) 0 1.5px,transparent 1.5px 4px)}
-#sbThumb.on{background:#14423A}
-@media (pointer:coarse),(max-width:900px){ #scrollSlider{display:block} }
+.mapTap{position:absolute;inset:0;z-index:900;cursor:pointer;background:transparent}
+.mapBack{display:none;position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);left:12px;z-index:1000;background:#14423A;color:#fff;border:2px solid #fff;border-radius:12px;padding:12px 18px;font:700 17px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.mapFull{position:fixed!important;inset:0;width:100vw!important;height:100dvh!important;max-width:none!important;border-radius:0!important;border:0!important;z-index:5000!important}
+.mapFull .mapTap{display:none}
+.mapFull .mapBack{display:block}
+body.mapOpen{overflow:hidden}
 </style>
 </head>
 <body>
@@ -165,10 +169,16 @@ button.idx{border:0;padding:0;cursor:pointer}
   </section>
 
   <section class="card" id="mapCard">
-    <div id="mapWrap">
-      <div id="map" role="region" aria-label="Kart over ruta"></div>
+    <div class="mapbox">
+      <div class="side">
       <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lgAct" hidden><i class="tg"></i>Aktivitet</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
+      </div>
+      <div id="mapWrap">
+        <div class="mapTap" role="button" aria-label="Åpne kartet i full skjerm"></div>
+        <button type="button" class="mapBack">‹ Tilbake</button>
+      <div id="map" role="region" aria-label="Kart over ruta"></div>
+      </div>
     </div>
   </section>
 
@@ -240,10 +250,16 @@ button.idx{border:0;padding:0;cursor:pointer}
   </section>
 
   <section class="card" id="nearMapCard" hidden>
-    <div id="nearMapWrap">
-      <div id="nmap" role="region" aria-label="Kart nær deg"></div>
+    <div class="mapbox">
+      <div class="side">
       <div class="legend"><span><i class="dt" style="background:#2563EB"></i>Du</span><span id="nlgHotel"><i class="dt"></i>Hotell</span><span id="nlgFuel"><i class="sq"></i>Bensin</span><span id="nlgEv"><i class="dm"></i>Lading</span><span id="nlgAct"><i class="tg"></i>Aktivitet</span></div>
       <div class="pair" id="nearPair"></div>
+      </div>
+      <div id="nearMapWrap">
+        <div class="mapTap" role="button" aria-label="Åpne kartet i full skjerm"></div>
+        <button type="button" class="mapBack">‹ Tilbake</button>
+      <div id="nmap" role="region" aria-label="Kart nær deg"></div>
+      </div>
     </div>
   </section>
 
@@ -253,8 +269,6 @@ button.idx{border:0;padding:0;cursor:pointer}
   </section>
 </div>
 </div>
-
-<div id="scrollSlider" aria-hidden="true"><div id="sbThumb"></div></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
@@ -1019,52 +1033,23 @@ button.idx{border:0;padding:0;cursor:pointer}
     meWatch = navigator.geolocation.watchPosition(onMe, meFail, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
   });
 
-  // ---- Left-side scroll slider (smooth: rAF + easing, cached metrics, transform) ----
-  (function(){
-    var box = $("scrollSlider"), th = $("sbThumb"), drag = false, dy = 0;
-    var max = 0, track = 1, top0 = 0, target = 0, cur = 0, running = false, shown = null;
-    function measure(){
-      max = Math.max(0, (document.documentElement.scrollHeight||0) - window.innerHeight);
-      track = Math.max(1, box.clientHeight - th.offsetHeight);
-      top0 = box.getBoundingClientRect().top;
-      var vis = max > 40;
-      if(vis !== shown){ shown = vis; box.style.visibility = vis ? "visible" : "hidden"; }
-    }
-    function place(y){ th.style.transform = "translate3d(0,"+(max ? Math.min(1,Math.max(0,y/max))*track : 0)+"px,0)"; }
-    function sync(){
-      if(drag) return;
-      measure();
-      place(window.pageYOffset || document.documentElement.scrollTop || 0);
-    }
-    function loop(){
-      var diff = target - cur;
-      if(Math.abs(diff) < 0.5){ cur = target; window.scrollTo(0, cur); running = false; return; }
-      cur += diff * 0.28;
-      window.scrollTo(0, cur);
-      requestAnimationFrame(loop);
-    }
-    function moveTo(clientY){
-      var pos = Math.min(track, Math.max(0, clientY - top0 - dy));
-      th.style.transform = "translate3d(0,"+pos+"px,0)";   // thumb follows the finger at once
-      target = (pos/track)*max;
-      if(!running){ running = true; requestAnimationFrame(loop); }
-    }
-    th.addEventListener("pointerdown", function(e){
-      measure(); drag = true; th.classList.add("on");
-      cur = target = window.pageYOffset || 0;
-      dy = e.clientY - th.getBoundingClientRect().top;
-      try{ th.setPointerCapture(e.pointerId); }catch(_){}
-      e.preventDefault();
-    });
-    th.addEventListener("pointermove", function(e){ if(drag){ moveTo(e.clientY); e.preventDefault(); } });
-    function end(){ drag = false; th.classList.remove("on"); setTimeout(sync, 300); }
-    th.addEventListener("pointerup", end); th.addEventListener("pointercancel", end);
-    var tick = false;
-    window.addEventListener("scroll", function(){ if(!drag && !tick){ tick = true; requestAnimationFrame(function(){ tick = false; sync(); }); } }, { passive:true });
-    window.addEventListener("resize", sync);
-    setInterval(function(){ if(!drag) sync(); }, 1000);
-    sync();
-  })();
+  // ---- Full-screen map ----
+  var fullWrap = null;
+  function mapObjFor(id){ return id==="nearMapWrap" ? nmap : lmap; }
+  function fullToggle(id, on){
+    var w = $(id); if(!w) return;
+    w.classList.toggle("mapFull", on); document.body.classList.toggle("mapOpen", on);
+    fullWrap = on ? id : null;
+    var m = mapObjFor(id);
+    setTimeout(function(){ if(m){ m.invalidateSize(); } }, 60);
+    if(!on){ w.scrollIntoView({block:"center"}); }
+  }
+  ["mapWrap","nearMapWrap"].forEach(function(id){
+    var w = $(id);
+    w.querySelector(".mapTap").addEventListener("click", function(){ fullToggle(id, true); });
+    w.querySelector(".mapBack").addEventListener("click", function(){ fullToggle(id, false); });
+  });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape" && fullWrap) fullToggle(fullWrap, false); });
 
   $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
   $("swap").addEventListener("click", function(){
