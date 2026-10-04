@@ -468,15 +468,25 @@ body.mapOpen{overflow:hidden}
     CATS.forEach(function(c){ if(cats[c]) out = out.concat(ACT_SEL[c]); });
     return out;
   }
-  // Route is split in chunks so every Overpass query stays light (avoids server timeouts)
+  // Route is cut into ~15 km pieces, each a small bounding box (fast on Overpass); up to 8 boxes per request
   function kindQueries(route, radiusKm, kind){
-    var pts = sampleRoute(route, Math.max(1.5, radiusKm*0.8), 400), out = [], per = 40;
-    for(var i=0;i<pts.length;i+=per-1){
-      var part = pts.slice(i, i+per);
-      if(part.length < 2 && out.length) break;
-      var coords = part.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
-      var ar = "(around:"+Math.round(radiusKm*1000)+","+coords+");";
-      out.push("[out:json][timeout:40];("+selectorsFor(kind, state.cats).map(function(x){ return x+ar; }).join("")+");out center tags 2000;");
+    var pad = radiusKm + 0.5, boxes = [], L = route.latlons, start = 0, i, lo;
+    function addBox(a, b){
+      var minLa = 90, maxLa = -90, minLo = 180, maxLo = -180, k;
+      for(k=a;k<=b;k++){ var p = L[k]; if(p[0]<minLa) minLa=p[0]; if(p[0]>maxLa) maxLa=p[0]; if(p[1]<minLo) minLo=p[1]; if(p[1]>maxLo) maxLo=p[1]; }
+      var dLa = pad/111.32, dLo = pad/(111.32*Math.cos(((minLa+maxLa)/2)*Math.PI/180));
+      boxes.push([minLa-dLa, minLo-dLo, maxLa+dLa, maxLo+dLo].map(function(v){ return v.toFixed(4); }).join(","));
+    }
+    for(i=1;i<L.length;i++){
+      if(route.cum[i] - route.cum[start] >= 15){ addBox(start, i); start = i; }
+    }
+    if(start < L.length-1 || !boxes.length) addBox(start, L.length-1);
+    var out = [], per = 8, sels = [];
+    (Array.isArray(kind)?kind:[kind]).forEach(function(k){ sels = sels.concat(selectorsFor(k, state.cats)); });
+    for(i=0;i<boxes.length;i+=per){
+      var part = boxes.slice(i, i+per), body = "";
+      part.forEach(function(b){ sels.forEach(function(x){ body += x+"("+b+");"; }); });
+      out.push("[out:json][timeout:50];("+body+");out center tags 3000;");
     }
     return out;
   }
@@ -498,7 +508,7 @@ body.mapOpen{overflow:hidden}
       function launch(k){
         if(done) return;
         var idx = (goodEp + k) % n, ctl = new AbortController(); ctls.push(ctl);
-        var t = setTimeout(function(){ ctl.abort(); }, 30000);
+        var t = setTimeout(function(){ ctl.abort(); }, 55000);
         fetch(OVERPASS[idx], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"}, signal:ctl.signal })
           .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
           .then(function(j){
@@ -507,7 +517,7 @@ body.mapOpen{overflow:hidden}
           })
           .catch(function(e){ clearTimeout(t); if(!done) fail(e); });
       }
-      for(var k=0;k<n;k++) (function(k){ timers.push(setTimeout(function(){ launch(k); }, k*3500)); })(k);
+      for(var k=0;k<n;k++) (function(k){ timers.push(setTimeout(function(){ launch(k); }, k*6000)); })(k);
     });
   }
 
@@ -722,7 +732,7 @@ body.mapOpen{overflow:hidden}
         m.bindPopup(popupFor(h)); m.addTo(mapLayer); markerById[h.id] = m; pts.push([h.lat,h.lon]);
       });
     });
-    if(fitPending){ fitPending = false; lmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:13 }); }
+    if(fitPending){ fitPending = false; fitRouteMap(); }
   }
 
   // One list row, used by both the route lists and "Nær meg"
@@ -855,12 +865,27 @@ body.mapOpen{overflow:hidden}
 
 
   // ---------- Nær meg ----------
-  // Map window: 2 mil (20 km) in every direction from the user's position
-  function fitNear(pos){
-    var dLat = 20/111.32, dLon = 20/(111.32*Math.cos(pos[0]*Math.PI/180));
-    nmap.invalidateSize();
-    nmap.fitBounds([[pos[0]-dLat,pos[1]-dLon],[pos[0]+dLat,pos[1]+dLon]], { padding:[0,0] });
+  // Map window: 20 x 20 km centred on a point (10 km each way)
+  function boxFit(map, lat, lon){
+    var dLat = 10/111.32, dLon = 10/(111.32*Math.cos(lat*Math.PI/180));
+    map.invalidateSize();
+    map.fitBounds([[lat-dLat,lon-dLon],[lat+dLat,lon+dLon]], { padding:[0,0] });
   }
+  // Route map with the user's position at the middle of the map edge the route leads away from
+  function fitRouteMap(){
+    var r = state.route; if(!r || !lmap) return;
+    if(!state.me){ boxFit(lmap, r.latlons[0][0], r.latlons[0][1]); return; }
+    var me = state.me, pl = place(r, me.lat, me.lon), tgt = Math.min(r.len, pl.along + 10), k = 0;
+    while(k < r.cum.length-1 && r.cum[k] < tgt) k++;
+    var ahead = r.latlons[k], cl = Math.cos(me.lat*Math.PI/180);
+    var dy = ahead[0]-me.lat, dx = (ahead[1]-me.lon)*cl;
+    if(Math.abs(dy)+Math.abs(dx) < 1e-6){ var e = r.latlons[r.latlons.length-1]; dy = e[0]-me.lat; dx = (e[1]-me.lon)*cl; }
+    var offLat = 0, offLon = 0, dLat = 10/111.32;
+    if(Math.abs(dy) >= Math.abs(dx)) offLat = dy >= 0 ? dLat : -dLat;          // heading north/south
+    else offLon = (dx >= 0 ? 1 : -1) * dLat/cl;                                   // heading east/west
+    boxFit(lmap, me.lat + offLat, me.lon + offLon);
+  }
+  function fitNear(pos){ boxFit(nmap, pos[0], pos[1]); }
   var nearKm = 15, nearBusy = false, nearMarkers = {}, nearSel = { hotel:true, fuel:false, ev:false, act:false }, nearCats = { family:false, sport:false, culture:false, food:false };
   var COMPASS = ["nord","nordøst","øst","sørøst","sør","sørvest","vest","nordvest"];
   function haversineKm(la1,lo1,la2,lo2){
@@ -1012,24 +1037,27 @@ body.mapOpen{overflow:hidden}
 
   var busy = false;
   // Fetch one kind of place along the current route; always resolves (errors are kept in state.err)
-  function loadKind(kind){
+  function loadKind(kind){ return loadMany([kind]); }
+  // One combined request for several kinds (the public servers are slow, so fewer round trips is better)
+  function loadMany(kinds){
     var tok = state.token, route = state.route;
-    if(state.items[kind] || state.loading[kind]) return Promise.resolve();
-    var ser = state.serial[kind] = (state.serial[kind]||0) + 1;
-    var live = function(){ return tok === state.token && ser === state.serial[kind]; };
-    state.loading[kind] = true; state.err[kind] = false;
-    var qs = kindQueries(route, state.qKm, kind), els = [], okCount = 0, chain = Promise.resolve();
+    kinds = kinds.filter(function(k){ return !state.items[k] && !state.loading[k]; });
+    if(!kinds.length) return Promise.resolve();
+    var sers = {};
+    kinds.forEach(function(k){ sers[k] = state.serial[k] = (state.serial[k]||0) + 1; state.loading[k] = true; state.err[k] = false; });
+    var live = function(k){ return tok === state.token && sers[k] === state.serial[k]; };
+    var qs = kindQueries(route, state.qKm, kinds), els = [], okCount = 0, chain = Promise.resolve();
     qs.forEach(function(q){
       chain = chain.then(function(){
         return runOverpass(q).then(function(j){ okCount++; els = els.concat(j.elements||[]); }, function(){});
       });
     });
     return chain.then(function(){
-      if(!live()) return;
-      if(!okCount) state.err[kind] = true;
-      else state.items[kind] = toItems({elements:els}, route, kind);
-    }).then(function(){
-      if(live()) state.loading[kind] = false;
+      kinds.forEach(function(k){
+        if(!live(k)) return;
+        if(!okCount) state.err[k] = true; else state.items[k] = toItems({elements:els}, route, k);
+        state.loading[k] = false;
+      });
     });
   }
   function search(){
@@ -1045,15 +1073,10 @@ body.mapOpen{overflow:hidden}
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
       state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
-      var chain = Promise.resolve(), first = true;
-      KINDS.filter(function(k){ return state.sel[k]; }).forEach(function(k){
-        chain = chain.then(function(){ st.textContent = "Henter "+NAMES[k][1]+" langs ruta…"; return loadKind(k); }).then(function(){
-          state.started = true; if(first){ first = false; fitPending = true; }
-          renderList();
-        });
-      });
-      return chain.then(function(){
-        var ks = KINDS.filter(function(k){ return state.sel[k]; });
+      var ks = KINDS.filter(function(k){ return state.sel[k]; });
+      st.textContent = "Henter "+ks.map(function(k){ return NAMES[k][1]; }).join(", ")+" langs ruta…";
+      return loadMany(ks).then(function(){
+        fitPending = true; renderList();
         if(ks.every(function(k){ return state.err[k]; })) throw new Error("all failed");
         st.textContent = "";
       });
@@ -1085,9 +1108,11 @@ body.mapOpen{overflow:hidden}
     return "Du er "+fmtKm(along)+" km fra "+state.from[0]+", "+offTxt+" fra veien.";
   }
   function onMe(pos){
+    var first = !state.me;
     state.me = { lat:pos.coords.latitude, lon:pos.coords.longitude, acc:pos.coords.accuracy };
     $("meStatus").className = "msg"; $("meStatus").textContent = meText();
     drawChart(); drawMeOnMap();
+    if(first && lmap && state.route) fitRouteMap();
   }
   function meFail(err){
     $("meStatus").className = "msg err";
