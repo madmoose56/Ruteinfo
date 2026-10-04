@@ -118,6 +118,9 @@ button.idx{border:0;padding:0;cursor:pointer}
 .mapFull .mapTap{display:none}
 .mapFull .mapBack{display:block}
 body.mapOpen{overflow:hidden}
+.hits{text-transform:none;letter-spacing:0;font-weight:400;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:14px;color:var(--ink-2)}
+.hits b{color:var(--ink);font-variant-numeric:tabular-nums}
+.hits .bad{color:#9B1C1C}
 </style>
 </head>
 <body>
@@ -162,6 +165,7 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
           <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
         </div>
+        <div class="hits" id="hits" aria-live="polite"></div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
       <p class="msg" id="status" role="status"></p>
@@ -472,22 +476,34 @@ body.mapOpen{overflow:hidden}
     return out;
   }
   var lastErr = "";
-  function runOverpass(q, i){
-    i = i||0;
-    var n = OVERPASS.length;
-    if(i >= n*2) return Promise.reject(new Error(lastErr || "ingen svar"));
-    var idx = (goodEp + i) % n;
-    var go = function(){
-      return fetchTimeout(OVERPASS[idx], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 20000)
-        .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-        .then(function(j){
-          if(j && j.remark && /runtime error|timed out|out of memory/i.test(j.remark) && !(j.elements && j.elements.length)) throw new Error("tidsavbrudd hos kartserver");
-          goodEp = idx;
-          return j;
-        })
-        .catch(function(e){ lastErr = (e && e.name==="AbortError") ? "tidsavbrudd" : ((e && e.message) || String(e)); return runOverpass(q, i+1); });
-    };
-    return i === n ? new Promise(function(res){ setTimeout(res, 2000); }).then(go) : go();
+  // Hedged request: start with the last working server, add the next one every 3.5 s, first good answer wins
+  function runOverpass(q, round){
+    round = round||0;
+    return new Promise(function(resolve, reject){
+      var n = OVERPASS.length, done = false, failed = 0, timers = [], ctls = [];
+      function finish(fn, v){ if(done) return; done = true; timers.forEach(clearTimeout); ctls.forEach(function(c){ try{ c.abort(); }catch(_){} }); fn(v); }
+      function fail(e){
+        lastErr = (e && e.name==="AbortError") ? "tidsavbrudd" : ((e && e.message) || String(e));
+        failed++;
+        if(failed >= n && !done){
+          if(round < 1) { done = true; timers.forEach(clearTimeout); setTimeout(function(){ runOverpass(q, round+1).then(resolve, reject); }, 2500); }
+          else finish(reject, new Error(lastErr || "ingen svar"));
+        }
+      }
+      function launch(k){
+        if(done) return;
+        var idx = (goodEp + k) % n, ctl = new AbortController(); ctls.push(ctl);
+        var t = setTimeout(function(){ ctl.abort(); }, 30000);
+        fetch(OVERPASS[idx], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"}, signal:ctl.signal })
+          .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+          .then(function(j){
+            if(j && j.remark && /runtime error|timed out|out of memory/i.test(j.remark)) throw new Error("kartserveren ga et ufullstendig svar");
+            clearTimeout(t); goodEp = idx; finish(resolve, j);
+          })
+          .catch(function(e){ clearTimeout(t); if(!done) fail(e); });
+      }
+      for(var k=0;k<n;k++) (function(k){ timers.push(setTimeout(function(){ launch(k); }, k*3500)); })(k);
+    });
   }
 
   var ACT_TYPES = {
@@ -754,6 +770,24 @@ body.mapOpen{overflow:hidden}
     shown.forEach(function(h,i){ list.appendChild(buildItem(h, i+1, routeCtx)); });
   }
 
+  var CAT_LBL = { family:"Familie", sport:"Friluft og sport", culture:"Kultur", food:"Mat og drikke" };
+  function updateHits(){
+    var box = $("hits"); if(!box) return;
+    var parts = [];
+    function part(label, kind, n){
+      if(state.err[kind] && !state.items[kind]) parts.push('<span class="bad">'+label+': feil</span>');
+      else if(!state.items[kind]) parts.push('<span>'+label+': …</span>');
+      else parts.push('<span>'+label+': <b>'+n+'</b></span>');
+    }
+    if(state.sel.hotel) part("Hoteller","hotel",visible("hotel").length);
+    if(state.sel.fuel) part("Bensin","fuel",visible("fuel").length);
+    if(state.sel.ev) part("Elbil-lading","ev",visible("ev").length);
+    if(state.sel.act){
+      var acts = visible("act");
+      CATS.forEach(function(c){ if(state.cats[c]) part(CAT_LBL[c],"act",acts.filter(function(h){ return h.cat===c; }).length); });
+    }
+    box.innerHTML = state.started ? parts.join("") : "";
+  }
   function renderList(){
     var res = $("results"), list = $("list"), empty = $("empty");
     if(!state.started){ res.hidden = true; return; }
@@ -779,6 +813,7 @@ body.mapOpen{overflow:hidden}
       arr.forEach(function(h){ list.appendChild(buildItem(h, idx[h.id], routeCtx)); });
     }
     renderExtra("fuel"); renderExtra("ev"); renderExtra("act");
+    updateHits();
     drawChart();
     updateMap();
   }
