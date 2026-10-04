@@ -336,7 +336,7 @@ body.mapOpen{overflow:hidden}
   ALL.forEach(function(c){ BY[c[0].toLowerCase()] = c; });
   var $ = function(id){ return document.getElementById(id); };
   var NS = "http://www.w3.org/2000/svg";
-  var OVERPASS = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+  var OVERPASS = ["https://overpass.openstreetmap.fr/api/interpreter","https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"], goodEp = 0;
   // Size of the start place: everything inside this radius from its centre is hidden (hotels, fuel and charging alike)
   var START_RADIUS = { "oslo":14, "bergen":11, "trondheim":9, "stavanger":9, "sandnes":8, "kristiansand":8, "tromsø":8, "drammen":8,
     "fredrikstad":8, "sarpsborg":7, "skien":7, "porsgrunn":7, "bodø":7, "ålesund":7, "tønsberg":7, "sandefjord":7, "asker":8, "bærum":9,
@@ -474,17 +474,20 @@ body.mapOpen{overflow:hidden}
   var lastErr = "";
   function runOverpass(q, i){
     i = i||0;
-    if(i >= OVERPASS.length*2) return Promise.reject(new Error(lastErr || "ingen svar"));
+    var n = OVERPASS.length;
+    if(i >= n*2) return Promise.reject(new Error(lastErr || "ingen svar"));
+    var idx = (goodEp + i) % n;
     var go = function(){
-      return fetchTimeout(OVERPASS[i % OVERPASS.length], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 35000)
+      return fetchTimeout(OVERPASS[idx], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 20000)
         .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
         .then(function(j){
           if(j && j.remark && /runtime error|timed out|out of memory/i.test(j.remark) && !(j.elements && j.elements.length)) throw new Error("tidsavbrudd hos kartserver");
+          goodEp = idx;
           return j;
         })
         .catch(function(e){ lastErr = (e && e.name==="AbortError") ? "tidsavbrudd" : ((e && e.message) || String(e)); return runOverpass(q, i+1); });
     };
-    return i >= OVERPASS.length ? new Promise(function(res){ setTimeout(res, 1500); }).then(go) : go();
+    return i === n ? new Promise(function(res){ setTimeout(res, 2000); }).then(go) : go();
   }
 
   var ACT_TYPES = {
