@@ -855,6 +855,12 @@ body.mapOpen{overflow:hidden}
 
 
   // ---------- Nær meg ----------
+  // Map window: 2 mil (20 km) in every direction from the user's position
+  function fitNear(pos){
+    var dLat = 20/111.32, dLon = 20/(111.32*Math.cos(pos[0]*Math.PI/180));
+    nmap.invalidateSize();
+    nmap.fitBounds([[pos[0]-dLat,pos[1]-dLon],[pos[0]+dLat,pos[1]+dLon]], { padding:[0,0] });
+  }
   var nearKm = 15, nearBusy = false, nearMarkers = {}, nearSel = { hotel:true, fuel:false, ev:false, act:false }, nearCats = { family:false, sport:false, culture:false, food:false };
   var COMPASS = ["nord","nordøst","øst","sørøst","sør","sørvest","vest","nordvest"];
   function haversineKm(la1,lo1,la2,lo2){
@@ -933,7 +939,7 @@ body.mapOpen{overflow:hidden}
         m.addTo(nlayer); nearMarkers[h.id] = m; if(i < 8) pts.push([h.lat,h.lon]);
       });
     });
-    nmap.fitBounds(L.latLngBounds(pts), { padding:[40,40], maxZoom:15 });
+    fitNear(pos);
   }
 
   function nearSearch(){
@@ -956,7 +962,7 @@ body.mapOpen{overflow:hidden}
         if(!total){
           $("nearList").textContent = ""; $("nearListCard").hidden = true;
           st.className = "msg err"; st.textContent = "Fant ingen "+nearNoun()+" innenfor "+nearKm+" km. Prøv en større radius.";
-          if(nearMapBase()){ $("nearPair").textContent = "Nær meg · "+nearKm+" km"; $("nlgHotel").hidden = $("nlgFuel").hidden = $("nlgEv").hidden = $("nlgAct").hidden = true; youMarker(pos, acc); nmap.setView(pos,10); }
+          if(nearMapBase()){ $("nearPair").textContent = "Nær meg · "+nearKm+" km"; $("nlgHotel").hidden = $("nlgFuel").hidden = $("nlgEv").hidden = $("nlgAct").hidden = true; youMarker(pos, acc); fitNear(pos); }
           return;
         }
         var msg = [];
