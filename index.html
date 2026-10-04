@@ -99,14 +99,27 @@ button.idx{border:0;padding:0;cursor:pointer}
 @media (prefers-color-scheme: dark){ .tabs a[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)} }
 .navlink{display:inline-block;margin-top:12px;padding:9px 14px;border:1.5px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:600;font-size:15px;text-decoration:none}
 .install{background:var(--band);border-radius:10px;padding:12px 14px;font-size:14px}
-@media (max-width:480px){
-  .cities{grid-template-columns:1fr 1fr}
-  .swap{grid-column:1 / -1;width:100%;height:36px}
+.cities label{min-width:0}
+.cities input{min-width:0;width:100%}
+@media (max-width:420px){
+  .cities{gap:6px}
+  .swap{width:36px}
+  .cities input{padding-left:9px;padding-right:9px}
 }
+#errBox{background:#FDE8E8;color:#7A1111;border:1px solid #E5A3A3;border-radius:8px;padding:10px 12px;font-size:13px;word-break:break-word}
+/* Big scroll slider on the right edge */
+#scrollSlider{display:none;position:fixed;right:4px;top:calc(env(safe-area-inset-top,0px) + 84px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);width:40px;z-index:3000;pointer-events:none}
+#scrollSlider::before{content:"";position:absolute;right:17px;top:0;bottom:0;width:6px;border-radius:3px;background:rgba(20,66,58,.2)}
+#sbThumb{position:absolute;right:0;top:0;width:40px;height:92px;border-radius:20px;background:#0B6B47;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:auto;touch-action:none;cursor:grab}
+#sbThumb::before{content:"";position:absolute;left:11px;right:11px;top:50%;height:26px;transform:translateY(-50%);background:repeating-linear-gradient(to bottom,rgba(255,255,255,.85) 0 3px,transparent 3px 8px)}
+#sbThumb.on{background:#14423A}
+@media (pointer:coarse),(max-width:900px){ #scrollSlider{display:block} }
 </style>
 </head>
 <body>
 <div class="wrap">
+<div id="errBox" hidden></div>
+<script>(function(){function show(m){var b=document.getElementById("errBox");if(b){b.hidden=false;b.textContent="Teknisk feil: "+m;}}window.addEventListener("error",function(e){show((e.message||"ukjent")+(e.lineno?" (linje "+e.lineno+")":""));});window.addEventListener("unhandledrejection",function(e){show(String(e.reason&&e.reason.message||e.reason));});})();</script>
 <header>
     <h1>Ruteinfo</h1>
     <p class="sub">Hoteller, bensin, elbil-lading og severdigheter langs veien mellom to steder i Norge.</p>
@@ -166,6 +179,8 @@ button.idx{border:0;padding:0;cursor:pointer}
     </div>
     <div class="chart" id="chart"></div>
     <p class="note" id="routeNote">Venter på søk. Ruta følger veien når veidata er tilgjengelig, ellers rett linje.</p>
+    <div class="seg" style="margin-top:12px"><button type="button" id="meBtn" aria-pressed="false">Vis min posisjon</button></div>
+    <p class="msg" id="meStatus" role="status"></p>
   </section>
 
   <section id="results" hidden>
@@ -239,6 +254,8 @@ button.idx{border:0;padding:0;cursor:pointer}
 </div>
 </div>
 
+<div id="scrollSlider" aria-hidden="true"><div id="sbThumb"></div></div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <script>
 (function(){
@@ -305,7 +322,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   ALL.forEach(function(c){ BY[c[0].toLowerCase()] = c; });
   var $ = function(id){ return document.getElementById(id); };
   var NS = "http://www.w3.org/2000/svg";
-  var OVERPASS = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+  var OVERPASS = ["https://overpass-api.de/api/interpreter","https://overpass.kumi.systems/api/interpreter","https://overpass.private.coffee/api/interpreter"];
   // Size of the start place: everything inside this radius from its centre is hidden (hotels, fuel and charging alike)
   var START_RADIUS = { "oslo":14, "bergen":11, "trondheim":9, "stavanger":9, "sandnes":8, "kristiansand":8, "tromsø":8, "drammen":8,
     "fredrikstad":8, "sarpsborg":7, "skien":7, "porsgrunn":7, "bodø":7, "ålesund":7, "tønsberg":7, "sandefjord":7, "asker":8, "bærum":9,
@@ -327,7 +344,7 @@ button.idx{border:0;padding:0;cursor:pointer}
   var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
   var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,act:false},
-    started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
+    me:null, started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
 
   function findCity(txt){
     var q = (txt||"").trim().toLowerCase();
@@ -434,12 +451,20 @@ button.idx{border:0;padding:0;cursor:pointer}
     var ar = "(around:"+Math.round(radiusKm*1000)+","+coords+");";
     return "[out:json][timeout:25];("+selectorsFor(kind, state.cats).map(function(x){ return x+ar; }).join("")+");out center tags 1500;";
   }
+  var lastErr = "";
   function runOverpass(q, i){
     i = i||0;
-    if(i >= OVERPASS.length) return Promise.reject(new Error("overpass"));
-    return fetchTimeout(OVERPASS[i], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 30000)
-      .then(function(r){ if(!r.ok) throw new Error("overpass "+r.status); return r.json(); })
-      .catch(function(){ return runOverpass(q, i+1); });
+    if(i >= OVERPASS.length*2) return Promise.reject(new Error(lastErr || "ingen svar"));
+    var go = function(){
+      return fetchTimeout(OVERPASS[i % OVERPASS.length], { method:"POST", body:"data="+encodeURIComponent(q), headers:{"Content-Type":"application/x-www-form-urlencoded"} }, 35000)
+        .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+        .then(function(j){
+          if(j && j.remark && /runtime error|timed out|out of memory/i.test(j.remark) && !(j.elements && j.elements.length)) throw new Error("tidsavbrudd hos kartserver");
+          return j;
+        })
+        .catch(function(e){ lastErr = (e && e.name==="AbortError") ? "tidsavbrudd" : ((e && e.message) || String(e)); return runOverpass(q, i+1); });
+    };
+    return i >= OVERPASS.length ? new Promise(function(res){ setTimeout(res, 1500); }).then(go) : go();
   }
 
   var ACT_TYPES = {
@@ -578,17 +603,26 @@ button.idx{border:0;padding:0;cursor:pointer}
         svg.appendChild(el("text",{x:cx,y:cyy+3.5,"text-anchor":"middle",fill:k==="hotel"?"var(--accent-ink)":"#fff","font-size":9.5,"font-weight":600,"font-family":"ui-monospace, monospace"},String(i+1)));
       });
     });
+    if(state.me){
+      var mp = place(route, state.me.lat, state.me.lon), off = mp.signed, far = Math.abs(off) > C;
+      var mx = xs(Math.max(0,Math.min(L,mp.along))), my = ys(Math.max(-C,Math.min(C,off)));
+      svg.appendChild(el("circle",{cx:mx,cy:my,r:15,fill:"#2563EB","fill-opacity":.2}));
+      svg.appendChild(el("circle",{cx:mx,cy:my,r:7,fill:"#2563EB",stroke:"#fff","stroke-width":2.5}));
+      var lx = Math.max(ml+14, Math.min(W-mr-14, mx));
+      svg.appendChild(el("text",{x:lx,y:Math.max(12,my-14),"text-anchor":"middle",fill:"#1D4ED8","font-size":12,"font-weight":700},"Du"));
+    }
     host.appendChild(svg);
   }
 
 
-  var lmap = null, mapLayer = null, markerById = {}, fitPending = true;
+  var lmap = null, mapLayer = null, meLayer = null, markerById = {}, fitPending = true;
   function initMap(){
     if(typeof L === "undefined"){ $("mapCard").hidden = true; return; }
     lmap = L.map("map", { scrollWheelZoom:false }).setView([64,12],4);
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:19,
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(lmap);
     mapLayer = L.layerGroup().addTo(lmap);
+    meLayer = L.layerGroup().addTo(lmap);
   }
   // Directions: opens the phone's own map app with navigation from the current position
   function gDirUrl(h){ return "https://www.google.com/maps/dir/?api=1&destination="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate"; }
@@ -920,7 +954,7 @@ button.idx{border:0;padding:0;cursor:pointer}
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
-      state.route = route; showRouteHeader(); drawChart(); fitPending = true; updateMap();
+      state.route = route; showRouteHeader(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
       var chain = Promise.resolve(), first = true;
       KINDS.filter(function(k){ return state.sel[k]; }).forEach(function(k){
         chain = chain.then(function(){ st.textContent = "Henter "+NAMES[k][1]+" langs ruta…"; return loadKind(k); }).then(function(){
@@ -937,9 +971,89 @@ button.idx{border:0;padding:0;cursor:pointer}
       st.className = "msg err";
       st.textContent = navigator.onLine === false
         ? "Du er uten nett. Koble til og prøv igjen."
-        : "Fikk ikke hentet data akkurat nå. Prøv igjen om litt.";
+        : "Fikk ikke hentet data akkurat nå ("+(lastErr || (e && e.message) || "ukjent feil")+"). Prøv igjen om litt.";
     }).then(function(){ busy = false; $("go").disabled = false; });
   }
+
+  // ---- Live position on chart + map ----
+  var meWatch = null;
+  function drawMeOnMap(){
+    if(!meLayer) return;
+    meLayer.clearLayers();
+    if(!state.me) return;
+    var ll = [state.me.lat, state.me.lon];
+    if(state.me.acc) L.circle(ll, { radius:Math.min(state.me.acc,2000), color:"#2563EB", weight:1, fillOpacity:.1 }).addTo(meLayer);
+    L.circleMarker(ll, { radius:8, color:"#fff", weight:3, fillColor:"#2563EB", fillOpacity:1 }).addTo(meLayer);
+  }
+  function meText(){
+    if(!state.me) return "";
+    if(!state.route) return "Posisjon funnet. Søk etter en rute for å se den på kartet.";
+    var mp = place(state.route, state.me.lat, state.me.lon), off = Math.abs(mp.signed);
+    var offTxt = off < 1 ? Math.round(off*1000)+" m" : fmtKm(off)+" km";
+    var along = Math.max(0, Math.min(state.route.len, mp.along));
+    if(off > Math.max(state.corridor, 3)) return "Du er "+offTxt+" fra ruta (nærmeste punkt: "+fmtKm(along)+" km fra "+state.from[0]+").";
+    return "Du er "+fmtKm(along)+" km fra "+state.from[0]+", "+offTxt+" fra veien.";
+  }
+  function onMe(pos){
+    state.me = { lat:pos.coords.latitude, lon:pos.coords.longitude, acc:pos.coords.accuracy };
+    $("meStatus").className = "msg"; $("meStatus").textContent = meText();
+    drawChart(); drawMeOnMap();
+  }
+  function meFail(err){
+    $("meStatus").className = "msg err";
+    $("meStatus").textContent = err && err.code===1 ? "Posisjon er avslått. Tillat posisjon for Safari i Innstillinger." : "Fikk ikke posisjon akkurat nå.";
+    stopMe(true);
+  }
+  function stopMe(keepMsg){
+    if(meWatch!==null && navigator.geolocation) navigator.geolocation.clearWatch(meWatch);
+    meWatch = null; state.me = null;
+    $("meBtn").setAttribute("aria-pressed","false"); $("meBtn").textContent = "Vis min posisjon";
+    if(!keepMsg) $("meStatus").textContent = "";
+    drawChart(); drawMeOnMap();
+  }
+  $("meBtn").addEventListener("click", function(){
+    if(meWatch!==null){ stopMe(); return; }
+    if(!navigator.geolocation){ $("meStatus").className = "msg err"; $("meStatus").textContent = "Enheten støtter ikke posisjon."; return; }
+    $("meStatus").className = "msg"; $("meStatus").textContent = "Finner posisjonen din…";
+    $("meBtn").setAttribute("aria-pressed","true"); $("meBtn").textContent = "Skjul min posisjon";
+    meWatch = navigator.geolocation.watchPosition(onMe, meFail, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
+  });
+
+  // ---- Right-side scroll slider ----
+  (function(){
+    var box = $("scrollSlider"), th = $("sbThumb"), drag = false, dy = 0;
+    function metrics(){
+      var de = document.documentElement, max = Math.max(0, (de.scrollHeight||0) - window.innerHeight);
+      var th_h = th.offsetHeight, track = Math.max(1, box.clientHeight - th_h);
+      return { max:max, track:track };
+    }
+    function sync(){
+      var m = metrics();
+      box.style.visibility = m.max > 40 ? "visible" : "hidden";
+      if(drag) return;
+      var y = window.pageYOffset || document.documentElement.scrollTop || 0;
+      th.style.top = (m.max ? Math.min(1, Math.max(0, y/m.max)) * m.track : 0) + "px";
+    }
+    function moveTo(clientY){
+      var m = metrics(), r = box.getBoundingClientRect();
+      var pos = Math.min(m.track, Math.max(0, clientY - r.top - dy));
+      th.style.top = pos + "px";
+      window.scrollTo(0, (pos/m.track)*m.max);
+    }
+    th.addEventListener("pointerdown", function(e){
+      drag = true; th.classList.add("on");
+      dy = e.clientY - th.getBoundingClientRect().top;
+      try{ th.setPointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault();
+    });
+    th.addEventListener("pointermove", function(e){ if(drag){ moveTo(e.clientY); e.preventDefault(); } });
+    function end(){ drag = false; th.classList.remove("on"); sync(); }
+    th.addEventListener("pointerup", end); th.addEventListener("pointercancel", end);
+    window.addEventListener("scroll", sync, { passive:true });
+    window.addEventListener("resize", sync);
+    setInterval(sync, 600);
+    sync();
+  })();
 
   $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
   $("swap").addEventListener("click", function(){
