@@ -108,9 +108,9 @@ button.idx{border:0;padding:0;cursor:pointer}
 }
 #errBox{background:#FDE8E8;color:#7A1111;border:1px solid #E5A3A3;border-radius:8px;padding:10px 12px;font-size:13px;word-break:break-word}
 /* Big scroll slider on the right edge */
-#scrollSlider{display:none;position:fixed;right:4px;top:calc(env(safe-area-inset-top,0px) + 84px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);width:40px;z-index:3000;pointer-events:none}
-#scrollSlider::before{content:"";position:absolute;right:17px;top:0;bottom:0;width:6px;border-radius:3px;background:rgba(20,66,58,.2)}
-#sbThumb{position:absolute;right:0;top:0;width:40px;height:92px;border-radius:20px;background:#0B6B47;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:auto;touch-action:none;cursor:grab}
+#scrollSlider{display:none;position:fixed;left:4px;top:calc(env(safe-area-inset-top,0px) + 84px);bottom:calc(env(safe-area-inset-bottom,0px) + 20px);width:40px;z-index:3000;pointer-events:none}
+#scrollSlider::before{content:"";position:absolute;left:17px;top:0;bottom:0;width:6px;border-radius:3px;background:rgba(20,66,58,.2)}
+#sbThumb{position:absolute;left:0;top:0;will-change:transform;-webkit-user-select:none;user-select:none;width:40px;height:92px;border-radius:20px;background:#0B6B47;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);pointer-events:auto;touch-action:none;cursor:grab}
 #sbThumb::before{content:"";position:absolute;left:11px;right:11px;top:50%;height:26px;transform:translateY(-50%);background:repeating-linear-gradient(to bottom,rgba(255,255,255,.85) 0 3px,transparent 3px 8px)}
 #sbThumb.on{background:#14423A}
 @media (pointer:coarse),(max-width:900px){ #scrollSlider{display:block} }
@@ -1019,39 +1019,50 @@ button.idx{border:0;padding:0;cursor:pointer}
     meWatch = navigator.geolocation.watchPosition(onMe, meFail, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
   });
 
-  // ---- Right-side scroll slider ----
+  // ---- Left-side scroll slider (smooth: rAF + easing, cached metrics, transform) ----
   (function(){
     var box = $("scrollSlider"), th = $("sbThumb"), drag = false, dy = 0;
-    function metrics(){
-      var de = document.documentElement, max = Math.max(0, (de.scrollHeight||0) - window.innerHeight);
-      var th_h = th.offsetHeight, track = Math.max(1, box.clientHeight - th_h);
-      return { max:max, track:track };
+    var max = 0, track = 1, top0 = 0, target = 0, cur = 0, running = false, shown = null;
+    function measure(){
+      max = Math.max(0, (document.documentElement.scrollHeight||0) - window.innerHeight);
+      track = Math.max(1, box.clientHeight - th.offsetHeight);
+      top0 = box.getBoundingClientRect().top;
+      var vis = max > 40;
+      if(vis !== shown){ shown = vis; box.style.visibility = vis ? "visible" : "hidden"; }
     }
+    function place(y){ th.style.transform = "translate3d(0,"+(max ? Math.min(1,Math.max(0,y/max))*track : 0)+"px,0)"; }
     function sync(){
-      var m = metrics();
-      box.style.visibility = m.max > 40 ? "visible" : "hidden";
       if(drag) return;
-      var y = window.pageYOffset || document.documentElement.scrollTop || 0;
-      th.style.top = (m.max ? Math.min(1, Math.max(0, y/m.max)) * m.track : 0) + "px";
+      measure();
+      place(window.pageYOffset || document.documentElement.scrollTop || 0);
+    }
+    function loop(){
+      var diff = target - cur;
+      if(Math.abs(diff) < 0.5){ cur = target; window.scrollTo(0, cur); running = false; return; }
+      cur += diff * 0.28;
+      window.scrollTo(0, cur);
+      requestAnimationFrame(loop);
     }
     function moveTo(clientY){
-      var m = metrics(), r = box.getBoundingClientRect();
-      var pos = Math.min(m.track, Math.max(0, clientY - r.top - dy));
-      th.style.top = pos + "px";
-      window.scrollTo(0, (pos/m.track)*m.max);
+      var pos = Math.min(track, Math.max(0, clientY - top0 - dy));
+      th.style.transform = "translate3d(0,"+pos+"px,0)";   // thumb follows the finger at once
+      target = (pos/track)*max;
+      if(!running){ running = true; requestAnimationFrame(loop); }
     }
     th.addEventListener("pointerdown", function(e){
-      drag = true; th.classList.add("on");
+      measure(); drag = true; th.classList.add("on");
+      cur = target = window.pageYOffset || 0;
       dy = e.clientY - th.getBoundingClientRect().top;
       try{ th.setPointerCapture(e.pointerId); }catch(_){}
       e.preventDefault();
     });
     th.addEventListener("pointermove", function(e){ if(drag){ moveTo(e.clientY); e.preventDefault(); } });
-    function end(){ drag = false; th.classList.remove("on"); sync(); }
+    function end(){ drag = false; th.classList.remove("on"); setTimeout(sync, 300); }
     th.addEventListener("pointerup", end); th.addEventListener("pointercancel", end);
-    window.addEventListener("scroll", sync, { passive:true });
+    var tick = false;
+    window.addEventListener("scroll", function(){ if(!drag && !tick){ tick = true; requestAnimationFrame(function(){ tick = false; sync(); }); } }, { passive:true });
     window.addEventListener("resize", sync);
-    setInterval(sync, 600);
+    setInterval(function(){ if(!drag) sync(); }, 1000);
     sync();
   })();
 
