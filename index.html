@@ -444,8 +444,8 @@ body.mapOpen{overflow:hidden}
   }
   var SELECTORS = {
     hotel: ['nwr["tourism"~"^(hotel|motel|guest_house|hostel|apartment)$"]["name"]'],
-    fuel:  ['nwr["amenity"="fuel"]'],
-    ev:    ['nwr["amenity"="charging_station"]']
+    fuel:  ['nw["amenity"="fuel"]'],
+    ev:    ['nw["amenity"="charging_station"]']
   };
   var ACT_SEL = {
     family:  ['nwr["tourism"~"^(theme_park|zoo|aquarium)$"]["name"]', 'nwr["leisure"~"^(water_park|miniature_golf|bowling_alley|amusement_arcade|trampoline_park|escape_game)$"]["name"]'],
@@ -459,11 +459,17 @@ body.mapOpen{overflow:hidden}
     CATS.forEach(function(c){ if(cats[c]) out = out.concat(ACT_SEL[c]); });
     return out;
   }
-  function kindQuery(route, radiusKm, kind){
-    var pts = sampleRoute(route, Math.max(1.5, radiusKm*0.8), 120);
-    var coords = pts.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
-    var ar = "(around:"+Math.round(radiusKm*1000)+","+coords+");";
-    return "[out:json][timeout:25];("+selectorsFor(kind, state.cats).map(function(x){ return x+ar; }).join("")+");out center tags 1500;";
+  // Route is split in chunks so every Overpass query stays light (avoids server timeouts)
+  function kindQueries(route, radiusKm, kind){
+    var pts = sampleRoute(route, Math.max(1.5, radiusKm*0.8), 400), out = [], per = 40;
+    for(var i=0;i<pts.length;i+=per-1){
+      var part = pts.slice(i, i+per);
+      if(part.length < 2 && out.length) break;
+      var coords = part.map(function(p){ return p[0].toFixed(5)+","+p[1].toFixed(5); }).join(",");
+      var ar = "(around:"+Math.round(radiusKm*1000)+","+coords+");";
+      out.push("[out:json][timeout:40];("+selectorsFor(kind, state.cats).map(function(x){ return x+ar; }).join("")+");out center tags 2000;");
+    }
+    return out;
   }
   var lastErr = "";
   function runOverpass(q, i){
@@ -948,10 +954,16 @@ body.mapOpen{overflow:hidden}
     var ser = state.serial[kind] = (state.serial[kind]||0) + 1;
     var live = function(){ return tok === state.token && ser === state.serial[kind]; };
     state.loading[kind] = true; state.err[kind] = false;
-    return runOverpass(kindQuery(route, state.qKm, kind)).then(function(json){
-      if(live()) state.items[kind] = toItems(json, route, kind);
-    }, function(){
-      if(live()) state.err[kind] = true;
+    var qs = kindQueries(route, state.qKm, kind), els = [], okCount = 0, chain = Promise.resolve();
+    qs.forEach(function(q){
+      chain = chain.then(function(){
+        return runOverpass(q).then(function(j){ okCount++; els = els.concat(j.elements||[]); }, function(){});
+      });
+    });
+    return chain.then(function(){
+      if(!live()) return;
+      if(!okCount) state.err[kind] = true;
+      else state.items[kind] = toItems({elements:els}, route, kind);
     }).then(function(){
       if(live()) state.loading[kind] = false;
     });
