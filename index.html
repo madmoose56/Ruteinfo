@@ -119,6 +119,11 @@ button.idx{border:0;padding:0;cursor:pointer}
 .mapFull .mapBack{display:block}
 body.mapOpen{overflow:hidden}
 .hits{text-transform:none;letter-spacing:0;font-weight:400;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:14px;color:var(--ink-2)}
+.hits{gap:8px}
+.hits button{font:inherit;font-size:14px;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.hits button[aria-pressed="true"]{background:#14423A;border-color:#14423A;color:#fff}
+.hits button[aria-pressed="true"] b{color:#fff}
+.hits button.bad{color:#9B1C1C}
 .hits b{color:var(--ink);font-variant-numeric:tabular-nums}
 .hits .bad{color:#9B1C1C}
 </style>
@@ -362,7 +367,7 @@ body.mapOpen{overflow:hidden}
   var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
   var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,act:false},
-    me:null, started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
+    me:null, view:null, started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
 
   function findCity(txt){
     var q = (txt||"").trim().toLowerCase();
@@ -760,9 +765,10 @@ body.mapOpen{overflow:hidden}
   function renderExtra(kind){
     var part = $(kind+"Part"), list = $(kind+"List"), empty = $(kind+"Empty"), nm = NAMES[kind];
     list.textContent = "";
-    part.hidden = !state.sel[kind];
-    if(!state.sel[kind]) return;
-    var items = state.items[kind], shown = visible(kind).sort(byAlong);
+    part.hidden = !state.sel[kind] || hiddenByView(kind);
+    if(part.hidden) return;
+    var items = state.items[kind], shown = visible(kind).sort(byAlong), cf = kind==="act" ? actCatFilter() : null;
+    if(cf) shown = shown.filter(function(h){ return h.cat === cf; });
     $(kind+"Count").textContent = items ? shown.length+" "+(shown.length===1?nm[0]:nm[1]) : nm[2];
     if(!items){ empty.hidden = false; empty.textContent = loadMsg(kind); return; }
     empty.hidden = shown.length > 0;
@@ -771,29 +777,41 @@ body.mapOpen{overflow:hidden}
   }
 
   var CAT_LBL = { family:"Familie", sport:"Friluft og sport", culture:"Kultur", food:"Mat og drikke" };
+  // The result chips double as the list chooser when several kinds are selected
+  function chipKeys(){
+    var k = [];
+    ["hotel","fuel","ev"].forEach(function(x){ if(state.sel[x]) k.push(x); });
+    CATS.forEach(function(c){ if(state.cats[c]) k.push("c:"+c); });
+    return k;
+  }
+  function curView(){ var ks = chipKeys(); return ks.indexOf(state.view) >= 0 ? state.view : ks[0]; }
+  function hiddenByView(kind){
+    var ks = chipKeys(); if(ks.length < 2) return false;
+    var v = curView();
+    return kind === "act" ? v.charAt(0) !== "c" : v !== kind;
+  }
+  function actCatFilter(){ var ks = chipKeys(), v = curView(); return (ks.length > 1 && v && v.charAt(0)==="c") ? v.slice(2) : null; }
   function updateHits(){
     var box = $("hits"); if(!box) return;
-    var parts = [];
-    function part(label, kind, n){
-      if(state.err[kind] && !state.items[kind]) parts.push('<span class="bad">'+label+': feil</span>');
-      else if(!state.items[kind]) parts.push('<span>'+label+': …</span>');
-      else parts.push('<span>'+label+': <b>'+n+'</b></span>');
-    }
-    if(state.sel.hotel) part("Hoteller","hotel",visible("hotel").length);
-    if(state.sel.fuel) part("Bensin","fuel",visible("fuel").length);
-    if(state.sel.ev) part("Elbil-lading","ev",visible("ev").length);
-    if(state.sel.act){
-      var acts = visible("act");
-      CATS.forEach(function(c){ if(state.cats[c]) part(CAT_LBL[c],"act",acts.filter(function(h){ return h.cat===c; }).length); });
-    }
-    box.innerHTML = state.started ? parts.join("") : "";
+    var ks = chipKeys(), cur = curView(), acts = state.sel.act ? visible("act") : [], html = "";
+    ks.forEach(function(key){
+      var kind = key.charAt(0)==="c" ? "act" : key, label = kind==="act" ? CAT_LBL[key.slice(2)] : NAMES[kind][2].replace("Ladestasjoner","Elbil-lading").replace("Bensinstasjoner","Bensin");
+      var n = kind==="act" ? acts.filter(function(h){ return h.cat===key.slice(2); }).length : visible(kind).length;
+      var body = (state.err[kind] && !state.items[kind]) ? label+": feil" : !state.items[kind] ? label+": …" : label+": <b>"+n+"</b>";
+      html += '<button type="button" data-v="'+key+'" aria-pressed="'+(key===cur?"true":"false")+'"'+((state.err[kind] && !state.items[kind])?' class="bad"':"")+'>'+body+'</button>';
+    });
+    box.innerHTML = state.started ? html : "";
   }
+  $("hits").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    state.view = b.getAttribute("data-v"); renderList();
+  });
   function renderList(){
     var res = $("results"), list = $("list"), empty = $("empty");
     if(!state.started){ res.hidden = true; return; }
     res.hidden = false; list.textContent = "";
-    $("hotelPart").hidden = !state.sel.hotel;
-    if(state.sel.hotel){
+    $("hotelPart").hidden = !state.sel.hotel || hiddenByView("hotel");
+    if(state.sel.hotel && !hiddenByView("hotel")){
       var shown = visible("hotel");
       var byRoute = shown.slice().sort(byAlong);
       var idx = {}; byRoute.forEach(function(h,i){ idx[h.id] = i+1; });
@@ -975,7 +993,9 @@ body.mapOpen{overflow:hidden}
   });
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    var r = togglePick(state.sel, state.cats, btn); if(!r || !state.started) return;
+    var r = togglePick(state.sel, state.cats, btn); if(!r) return;
+    if(r.on) state.view = r.isCat ? "c:"+r.key : r.key;
+    if(!state.started) return;
     if(r.isCat && r.on){   // a new activity type needs a new query
       state.items.act = null; state.err.act = false; state.loading.act = false;
       renderList(); loadKind("act").then(renderList); return;
@@ -1018,7 +1038,7 @@ body.mapOpen{overflow:hidden}
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
-      state.route = route; showRouteHeader(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
+      state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
       var chain = Promise.resolve(), first = true;
       KINDS.filter(function(k){ return state.sel[k]; }).forEach(function(k){
         chain = chain.then(function(){ st.textContent = "Henter "+NAMES[k][1]+" langs ruta…"; return loadKind(k); }).then(function(){
