@@ -121,8 +121,9 @@ body.mapOpen{overflow:hidden}
 .hits{text-transform:none;letter-spacing:0;font-weight:400;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:14px;color:var(--ink-2)}
 .hits{gap:8px}
 .hits button{font:inherit;font-size:14px;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
-.hits button[aria-pressed="true"]{background:#14423A;border-color:#14423A;color:#fff}
-.hits button[aria-pressed="true"] b{color:#fff}
+.hits button[aria-pressed="true"]{background:#D4EFDF;border-color:var(--accent);color:var(--ink);font-weight:600}
+.hits button[aria-pressed="true"] b{color:var(--ink)}
+@media (prefers-color-scheme: dark){ .hits button[aria-pressed="true"]{background:var(--band)} }
 .hits button.bad{color:#9B1C1C}
 .hits b{color:var(--ink);font-variant-numeric:tabular-nums}
 .hits .bad{color:#9B1C1C}
