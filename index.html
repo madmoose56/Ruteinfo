@@ -1135,6 +1135,13 @@ body.mapOpen{overflow:hidden}
   });
 
   // ---- Full-screen map ----
+  // After the map box changes size, force a full redraw so the route line stays on the roads
+  function refreshMap(m){
+    if(!m) return;
+    var c = m.getCenter(), z = m.getZoom();
+    m.invalidateSize(false);
+    m.setView(c, z, { animate:false, reset:true });
+  }
   var fullWrap = null;
   function mapObjFor(id){ return id==="nearMapWrap" ? nmap : lmap; }
   function fullToggle(id, on){
@@ -1142,7 +1149,8 @@ body.mapOpen{overflow:hidden}
     w.classList.toggle("mapFull", on); document.body.classList.toggle("mapOpen", on);
     fullWrap = on ? id : null;
     var m = mapObjFor(id);
-    setTimeout(function(){ if(m){ m.invalidateSize(); } }, 60);
+    setTimeout(function(){ refreshMap(m); }, 60);
+    setTimeout(function(){ refreshMap(m); }, 400);
     if(!on){ w.scrollIntoView({block:"center"}); }
   }
   ["mapWrap","nearMapWrap"].forEach(function(id){
@@ -1189,7 +1197,7 @@ body.mapOpen{overflow:hidden}
     else { $("tabRoute").setAttribute("aria-current","page"); $("tabNear").removeAttribute("aria-current"); }
     document.title = near ? "Nær meg – Ruteinfo" : "Ruteinfo";
     window.scrollTo(0,0);
-    setTimeout(function(){ if(near){ if(nmap) nmap.invalidateSize(); } else if(lmap) lmap.invalidateSize(); }, 50);
+    setTimeout(function(){ if(near){ refreshMap(nmap); } else refreshMap(lmap); }, 50);
   }
   window.addEventListener("hashchange", showView);
   showView();
