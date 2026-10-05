@@ -49,6 +49,10 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 .go:disabled{opacity:.5;cursor:default}
 .msg{margin:0;font-size:14px;min-height:1.4em}
 .msg.err{color:var(--warn)}
+.statusRow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.statusRow .msg{flex:1 1 160px}
+.cancel{font:inherit;font-size:15px;font-weight:600;border:1.5px solid var(--warn);background:var(--surface);color:var(--warn);border-radius:8px;padding:8px 14px;min-height:40px;cursor:pointer;flex:none}
+.cancel[hidden]{display:none}
 .chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .chart-head h2,.list-head h2{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
@@ -179,7 +183,7 @@ body.mapOpen{overflow:hidden}
         <div class="hits" id="hits" aria-live="polite"></div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
-      <p class="msg" id="status" role="status"></p>
+      <div class="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
     </form>
   </section>
 
@@ -453,18 +457,21 @@ body.mapOpen{overflow:hidden}
     }
     return out;
   }
-  var lastErr = "";
+  var lastErr = "", opSerial = 0, aborters = [];   // "Avbryt søk" bumps opSerial and calls the aborters
   // Hedged request: start with the last working server, add the next one every 3.5 s, first good answer wins
   function runOverpass(q, round){
     round = round||0;
+    var my = opSerial;
     return new Promise(function(resolve, reject){
       var n = OVERPASS.length, done = false, failed = 0, timers = [], ctls = [];
       function finish(fn, v){ if(done) return; done = true; timers.forEach(clearTimeout); ctls.forEach(function(c){ try{ c.abort(); }catch(_){} }); fn(v); }
+      if(my !== opSerial){ finish(reject, new Error("avbrutt")); return; }
+      aborters.push(function(){ finish(reject, new Error("avbrutt")); });
       function fail(e){
         lastErr = (e && e.name==="AbortError") ? "tidsavbrudd" : ((e && e.message) || String(e));
         failed++;
         if(failed >= n && !done){
-          if(round < 1) { done = true; timers.forEach(clearTimeout); setTimeout(function(){ runOverpass(q, round+1).then(resolve, reject); }, 2500); }
+          if(round < 1) { done = true; timers.forEach(clearTimeout); setTimeout(function(){ if(my !== opSerial) reject(new Error("avbrutt")); else runOverpass(q, round+1).then(resolve, reject); }, 2500); }
           else finish(reject, new Error(lastErr || "ingen svar"));
         }
       }
@@ -905,6 +912,16 @@ body.mapOpen{overflow:hidden}
   });
 
   var busy = false;
+  function setBusy(on){ busy = on; $("go").disabled = on; $("cancel").hidden = !on; }
+  function cancelSearch(){
+    if(!busy) return;
+    opSerial++; state.token++;
+    var a = aborters; aborters = []; a.forEach(function(f){ f(); });
+    KINDS.forEach(function(k){ if(state.loading[k]){ state.loading[k] = false; state.err[k] = true; } });
+    setBusy(false);
+    if(state.started) renderList();
+    $("status").className = "msg"; $("status").textContent = "Søket ble avbrutt.";
+  }
   // Fetch one kind of place along the current route; always resolves (errors are kept in state.err)
   function loadKind(kind){ return loadMany([kind]); }
   // One combined request for several kinds (the public servers are slow, so fewer round trips is better)
@@ -935,37 +952,42 @@ body.mapOpen{overflow:hidden}
     var p = cityPair();
     if(p.error){ st.className = "msg err"; st.textContent = p.error; return; }
     if(busy) return;
-    busy = true; $("go").disabled = true;
+    setBusy(true);
     if(fromGps){
+      var t0 = state.token;
       st.textContent = "Henter posisjonen din…";
-      getStartPos().then(function(a){ busy = false; searchFrom(a, p.b); }, function(e){
-        st.className = "msg err"; st.textContent = e.msg; busy = false; $("go").disabled = false;
+      getStartPos().then(function(a){ if(t0 === state.token) searchFrom(a, p.b); }, function(e){
+        if(t0 !== state.token) return;
+        st.className = "msg err"; st.textContent = e.msg; setBusy(false);
       });
     } else searchFrom(p.a, p.b);
   }
   function searchFrom(a, b){
     var st = $("status"); st.className = "msg";
-    busy = true; $("go").disabled = true;
+    setBusy(true);
     var p = { a:a, b:b };
-    state.token++; state.items = { hotel:null, fuel:null, ev:null, act:null }; state.err = {}; state.loading = {}; state.started = false;
+    var tok = ++state.token; state.items = { hotel:null, fuel:null, ev:null, act:null }; state.err = {}; state.loading = {}; state.started = false;
     state.from = p.a; state.to = p.b; state.qKm = Math.max(state.corridor, 3); $("results").hidden = true;
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
+      if(tok !== state.token) return;
       state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
       var ks = KINDS.filter(function(k){ return state.sel[k]; });
       st.textContent = "Henter "+ks.map(function(k){ return NAMES[k][1]; }).join(", ")+" langs ruta…";
       return loadMany(ks).then(function(){
+        if(tok !== state.token) return;
         fitPending = true; renderList();
         if(ks.every(function(k){ return state.err[k]; })) throw new Error("all failed");
         st.textContent = "";
       });
     }).catch(function(e){
+      if(tok !== state.token) return;
       st.className = "msg err";
       st.textContent = navigator.onLine === false
         ? "Du er uten nett. Koble til og prøv igjen."
         : "Fikk ikke hentet data akkurat nå ("+(lastErr || (e && e.message) || "ukjent feil")+"). Prøv igjen om litt.";
-    }).then(function(){ busy = false; $("go").disabled = false; });
+    }).then(function(){ if(tok === state.token) setBusy(false); });
   }
 
   // ---- Live position on chart + map ----
@@ -1039,6 +1061,7 @@ body.mapOpen{overflow:hidden}
   });
   document.addEventListener("keydown", function(e){ if(e.key==="Escape" && fullWrap) fullToggle(fullWrap, false); });
 
+  $("cancel").addEventListener("click", cancelSearch);
   $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
   $("swap").addEventListener("click", function(){
     var f = $("from"), t = $("to"), x = f.value; f.value = t.value; t.value = x;
