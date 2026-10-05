@@ -180,17 +180,17 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
           <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
         </div>
-        <div class="hits" id="hits" aria-live="polite"></div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
       <div class="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
+      <div class="hits" id="hits" aria-live="polite"></div>
     </form>
   </section>
 
   <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
-      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lgAct" hidden><i class="tg"></i>Aktivitet</span></div>
+      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lg_family" hidden><i class="tg"></i>Familie</span><span id="lg_sport" hidden><i class="tg"></i>Friluft og sport</span><span id="lg_culture" hidden><i class="tg"></i>Kultur</span><span id="lg_food" hidden><i class="tg"></i>Mat og drikke</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
       </div>
       <div id="mapWrap">
@@ -686,7 +686,8 @@ body.mapOpen{overflow:hidden}
   function updateMap(){
     if(!lmap || !state.route || !state.from) return;
     $("pairLbl").textContent = state.from[0]+" → "+state.to[0];
-    $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev; $("lgAct").hidden = !state.sel.act;
+    $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev;
+    CATS.forEach(function(c){ $("lg_"+c).hidden = !state.cats[c]; });
     mapLayer.clearLayers(); markerById = {};
     var ll = state.route.latlons.map(function(p){ return [p[0],p[1]]; });
     L.polyline(ll, { color:"#0B6B47", weight:6, opacity:.95, lineJoin:"round" }).addTo(mapLayer);
