@@ -122,6 +122,10 @@ button.idx{border:0;padding:0;cursor:pointer}
 .mapFull .mapTap{display:none}
 .mapFull .mapBack{display:block}
 body.mapOpen{overflow:hidden}
+.hitsBottom{margin:4px 0 14px}
+#results{padding-bottom:60px}
+.toTop{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:3000;background:#14423A;color:#fff;border:2px solid #fff;border-radius:999px;padding:10px 16px;font:700 15px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+.toTop[hidden],body.mapOpen .toTop{display:none}
 .hits{text-transform:none;letter-spacing:0;font-weight:400;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:14px;color:var(--ink-2)}
 .hits{gap:8px}
 .hits button{font:inherit;font-size:14px;padding:8px 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
@@ -240,9 +244,11 @@ body.mapOpen{overflow:hidden}
       <ol id="actList"></ol>
       <p class="empty" id="actEmpty" hidden></p>
     </div>
+    <div class="hits hitsBottom" id="hits2" aria-label="Velg liste"></div>
     <p class="note">Data fra OpenStreetMap-bidragsytere. Priser (rom, drivstoff og lading), ledige rom og åpningstider vises ikke alltid. Sjekk hos stedet.</p>
   </section>
 </div>
+<button type="button" class="toTop" id="toTop" hidden>↑ Til toppen</button>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -780,12 +786,19 @@ body.mapOpen{overflow:hidden}
       html += '<button type="button" data-v="'+key+'" aria-pressed="'+(key===cur?"true":"false")+'"'+((state.err[kind] && !state.items[kind])?' class="bad"':"")+'>'+body+'</button>';
     });
     box.innerHTML = state.started ? html : "";
+    $("hits2").innerHTML = state.started && ks.length > 1 ? html : "";
   }
-  $("hits").addEventListener("click", function(e){
+  function onHitClick(e){
     var b = e.target.closest("button"); if(!b) return;
     state.view = b.getAttribute("data-v"); renderList();
     if(!$("results").hidden) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
-  });
+  }
+  $("hits").addEventListener("click", onHitClick);
+  $("hits2").addEventListener("click", onHitClick);
+  // "Til toppen" shows once the search button has scrolled out of view
+  function syncToTop(){ $("toTop").hidden = $("go").getBoundingClientRect().bottom > 0; }
+  window.addEventListener("scroll", syncToTop, { passive:true });
+  $("toTop").addEventListener("click", function(){ window.scrollTo({ top:0, behavior:"smooth" }); });
   function renderList(){
     var res = $("results"), list = $("list"), empty = $("empty");
     if(!state.started){ res.hidden = true; return; }
