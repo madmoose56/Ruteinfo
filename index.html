@@ -29,7 +29,7 @@
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;
-  padding-inline:16px;padding-top:calc(env(safe-area-inset-top,0px) + 20px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
+  padding-inline:16px;padding-top:0;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 40px)}
 .wrap{max-width:720px;margin-inline:auto;display:flex;flex-direction:column;gap:16px}
 h1{font-family:var(--font-display);font-weight:700;font-size:40px;line-height:1;letter-spacing:.01em;margin:0}
 .sub{color:var(--ink-2);margin:6px 0 0}
@@ -122,8 +122,10 @@ button.idx{border:0;padding:0;cursor:pointer}
 .mapFull .mapTap{display:none}
 .mapFull .mapBack{display:block}
 body.mapOpen{overflow:hidden}
-.hitsBottom{margin:4px 0 14px}
-#results{padding-bottom:60px}
+.topbar{position:sticky;top:0;z-index:2000;background:var(--bg);margin-inline:-16px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px 8px}
+.topbar .hits{margin-top:8px}
+.topbar .hits[hidden]{display:none}
+#results{padding-bottom:60px;scroll-margin-top:130px}
 .toTop{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:3000;background:#14423A;color:#fff;border:2px solid #fff;border-radius:999px;padding:10px 16px;font:700 15px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
 .toTop[hidden],body.mapOpen .toTop{display:none}
 .hits{text-transform:none;letter-spacing:0;font-weight:400;display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:14px;color:var(--ink-2)}
@@ -141,10 +143,11 @@ body.mapOpen{overflow:hidden}
 <div class="wrap">
 <div id="errBox" hidden></div>
 <script>(function(){function show(m){var b=document.getElementById("errBox");if(b){b.hidden=false;b.textContent="Teknisk feil: "+m;}}window.addEventListener("error",function(e){show((e.message||"ukjent")+(e.lineno?" (linje "+e.lineno+")":""));});window.addEventListener("unhandledrejection",function(e){show(String(e.reason&&e.reason.message||e.reason));});})();</script>
-<header>
+<header class="topbar">
     <h1>Ruteinfo</h1>
-    <p class="sub">Hoteller, bensin, elbil-lading og severdigheter langs veien mellom to steder i Norge.</p>
+    <div class="hits" id="hitsTop" aria-label="Velg liste" hidden></div>
 </header>
+<p class="sub" style="margin-top:-12px">Hoteller, bensin, elbil-lading og severdigheter langs veien mellom to steder i Norge.</p>
 <div class="view" id="viewRoute">
 
   <div class="install" id="install" hidden>
@@ -244,7 +247,6 @@ body.mapOpen{overflow:hidden}
       <ol id="actList"></ol>
       <p class="empty" id="actEmpty" hidden></p>
     </div>
-    <div class="hits hitsBottom" id="hits2" aria-label="Velg liste"></div>
     <p class="note">Data fra OpenStreetMap-bidragsytere. Priser (rom, drivstoff og lading), ledige rom og åpningstider vises ikke alltid. Sjekk hos stedet.</p>
   </section>
 </div>
@@ -786,7 +788,7 @@ body.mapOpen{overflow:hidden}
       html += '<button type="button" data-v="'+key+'" aria-pressed="'+(key===cur?"true":"false")+'"'+((state.err[kind] && !state.items[kind])?' class="bad"':"")+'>'+body+'</button>';
     });
     box.innerHTML = state.started ? html : "";
-    $("hits2").innerHTML = state.started && ks.length > 1 ? html : "";
+    $("hitsTop").innerHTML = box.innerHTML; syncTop();
   }
   function onHitClick(e){
     var b = e.target.closest("button"); if(!b) return;
@@ -794,10 +796,15 @@ body.mapOpen{overflow:hidden}
     if(!$("results").hidden) $("results").scrollIntoView({ behavior:"smooth", block:"start" });
   }
   $("hits").addEventListener("click", onHitClick);
-  $("hits2").addEventListener("click", onHitClick);
-  // "Til toppen" shows once the search button has scrolled out of view
-  function syncToTop(){ $("toTop").hidden = $("go").getBoundingClientRect().bottom > 0; }
-  window.addEventListener("scroll", syncToTop, { passive:true });
+  $("hitsTop").addEventListener("click", onHitClick);
+  // Locked top bar: the hit chips appear there once the ones under the search button have scrolled away.
+  // "Til toppen" shows once the search button has scrolled out of view.
+  function syncTop(){
+    var h1Bottom = $("hitsTop").previousElementSibling.getBoundingClientRect().bottom;
+    $("toTop").hidden = $("go").getBoundingClientRect().bottom > h1Bottom;
+    $("hitsTop").hidden = !$("hits").hasChildNodes() || $("hits").getBoundingClientRect().bottom > h1Bottom + 8;
+  }
+  window.addEventListener("scroll", syncTop, { passive:true });
   $("toTop").addEventListener("click", function(){ window.scrollTo({ top:0, behavior:"smooth" }); });
   function renderList(){
     var res = $("results"), list = $("list"), empty = $("empty");
