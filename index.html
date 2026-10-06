@@ -214,9 +214,7 @@ body.mapOpen{overflow:hidden}
       <span class="mono" id="routeLen"></span>
     </div>
     <div class="chart" id="chart"></div>
-    <p class="note" id="routeNote">Venter på søk. Ruta følger veien når veidata er tilgjengelig, ellers rett linje.</p>
-    <div class="seg" style="margin-top:12px"><button type="button" id="meBtn" aria-pressed="false">Vis min posisjon</button></div>
-    <p class="msg" id="meStatus" role="status"></p>
+    <p class="msg" id="meStatus" role="status" style="margin-top:8px"></p>
   </section>
 
   <section id="results" hidden>
@@ -868,16 +866,10 @@ body.mapOpen{overflow:hidden}
     });
   }
 
-  function startNote(){
-    return state.from[3]==="pos" ? "Treff nærmere enn 1,5 km fra der du startet tas ikke med." : "Treff i startstedet ("+state.from[0]+") tas ikke med.";
-  }
   function showRouteHeader(){
     $("routeTitle").textContent = state.from[0]+" – "+state.to[0];
     if(state.route){
       $("routeLen").textContent = "ca. "+fmtKm(state.route.len)+" km "+(state.route.kind==="vei"?"langs veien":"luftlinje");
-      $("routeNote").textContent = state.route.kind==="vei"
-        ? "Avstandene er målt fra den kjørte veien. "+startNote()
-        : "Fikk ikke veidata, så ruta er en rett linje og avstandene er luftlinje. "+startNote();
     }
   }
 
@@ -1038,25 +1030,15 @@ body.mapOpen{overflow:hidden}
     drawChart(); drawMeOnMap();
     if(first && lmap && state.route) fitRouteMap();
   }
+  // My position is always on: the watch keeps running and retries by itself after a timeout
   function meFail(err){
-    $("meStatus").className = "msg err";
-    $("meStatus").textContent = err && err.code===1 ? "Posisjon er avslått. Tillat posisjon for Safari i Innstillinger." : "Fikk ikke posisjon akkurat nå.";
-    stopMe(true);
+    if(err && err.code===1){
+      if(meWatch!==null) navigator.geolocation.clearWatch(meWatch);
+      meWatch = null;
+      $("meStatus").className = "msg err"; $("meStatus").textContent = "Posisjon er avslått. Tillat posisjon for Safari i Innstillinger.";
+    }
   }
-  function stopMe(keepMsg){
-    if(meWatch!==null && navigator.geolocation) navigator.geolocation.clearWatch(meWatch);
-    meWatch = null; state.me = null;
-    $("meBtn").setAttribute("aria-pressed","false"); $("meBtn").textContent = "Vis min posisjon";
-    if(!keepMsg) $("meStatus").textContent = "";
-    drawChart(); drawMeOnMap();
-  }
-  $("meBtn").addEventListener("click", function(){
-    if(meWatch!==null){ stopMe(); return; }
-    if(!navigator.geolocation){ $("meStatus").className = "msg err"; $("meStatus").textContent = "Enheten støtter ikke posisjon."; return; }
-    $("meStatus").className = "msg"; $("meStatus").textContent = "Finner posisjonen din…";
-    $("meBtn").setAttribute("aria-pressed","true"); $("meBtn").textContent = "Skjul min posisjon";
-    meWatch = navigator.geolocation.watchPosition(onMe, meFail, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
-  });
+  if(navigator.geolocation) meWatch = navigator.geolocation.watchPosition(onMe, meFail, { enableHighAccuracy:true, maximumAge:5000, timeout:20000 });
 
   // ---- Full-screen map ----
   // After the map box changes size, force a full redraw so the route line stays on the roads
@@ -1109,7 +1091,7 @@ body.mapOpen{overflow:hidden}
   var p0 = cityPair();
   if(!p0.error){
     state.from = p0.a; state.to = p0.b; state.route = getStraightRoute(p0.a, p0.b);
-    showRouteHeader(); $("routeNote").textContent = "Trykk Søk langs ruta. Ruta følger veien når veidata er tilgjengelig.";
+    showRouteHeader();
     $("routeLen").textContent = ""; drawChart(); initMap(); updateMap();
   } else initMap();
 
