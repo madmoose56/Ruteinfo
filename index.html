@@ -56,7 +56,15 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 .chart-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .chart-head h2,.list-head h2{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-.chart{overflow-x:auto}
+.chart{overflow-x:auto;scrollbar-width:none}
+.chart::-webkit-scrollbar{display:none}
+/* Wide slider under the route profile (the phone's own scrollbar is too thin to grab) */
+.chartSlider{display:block;width:100%;margin:10px 0 2px;height:32px;background:transparent;-webkit-appearance:none;appearance:none;cursor:pointer}
+.chartSlider[hidden]{display:none}
+.chartSlider::-webkit-slider-runnable-track{height:12px;border-radius:6px;background:var(--band);border:1px solid var(--line)}
+.chartSlider::-moz-range-track{height:12px;border-radius:6px;background:var(--band);border:1px solid var(--line)}
+.chartSlider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:72px;height:30px;margin-top:-10px;border-radius:15px;background:#14423A;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
+.chartSlider::-moz-range-thumb{width:72px;height:30px;border-radius:15px;background:#14423A;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
 .chart svg{display:block;height:auto}
 .chart{touch-action:pan-x pan-y}
 .zoomBtns{display:flex;gap:6px;margin-left:auto}
@@ -235,6 +243,7 @@ body.mapOpen{overflow:hidden}
       <div class="zoomBtns"><button type="button" id="zoomOut" aria-label="Zoom ut">−</button><button type="button" id="zoomIn" aria-label="Zoom inn">+</button></div>
     </div>
     <div class="chart" id="chart"></div>
+    <input type="range" class="chartSlider" id="chartSlider" min="0" max="1000" value="0" aria-label="Bla i ruteprofilen" hidden>
     <p class="msg" id="meStatus" role="status" style="margin-top:8px"></p>
   </section>
 
@@ -940,8 +949,18 @@ body.mapOpen{overflow:hidden}
     var host = $("chart"), frac = host.scrollWidth ? (host.scrollLeft + host.clientWidth/2)/host.scrollWidth : 0.5;
     chartZoom = z; drawChart();
     host.scrollLeft = frac*host.scrollWidth - host.clientWidth/2;
-    syncZoomBtns();
+    syncZoomBtns(); syncSlider();
   }
+  // Slider and profile follow each other
+  function syncSlider(){
+    var host = $("chart"), sl = $("chartSlider"), room = host.scrollWidth - host.clientWidth;
+    sl.hidden = !state.started || room <= 1;
+    if(!sl.hidden) sl.value = Math.round(1000*host.scrollLeft/room);
+  }
+  $("chart").addEventListener("scroll", syncSlider, { passive:true });
+  $("chartSlider").addEventListener("input", function(){
+    var host = $("chart"); host.scrollLeft = (host.scrollWidth - host.clientWidth)*this.value/1000;
+  });
   function syncZoomBtns(){ $("zoomOut").disabled = chartZoom <= 1; $("zoomIn").disabled = chartZoom >= ZMAX; }
   // New route: back to 20 % of the route, showing where you are (or the start)
   function resetChartView(){
@@ -950,6 +969,7 @@ body.mapOpen{overflow:hidden}
     var km = 0;
     if(state.me){ var mp = place(r, state.me.lat, state.me.lon); if(mp.off <= Math.max(state.corridor, 3)) km = Math.max(0, Math.min(r.len, mp.along)); }
     host.scrollLeft = (km/r.len)*host.scrollWidth - host.clientWidth/2;
+    syncSlider();
   }
   function drawChart(){
     var host = $("chart"); host.textContent = "";
