@@ -57,7 +57,11 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 .chart-head h2,.list-head h2{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
 .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 .chart{overflow-x:auto}
-.chart svg{display:block;width:100%;height:auto;min-width:420px}
+.chart svg{display:block;height:auto}
+.chart{touch-action:pan-x pan-y}
+.zoomBtns{display:flex;gap:6px;margin-left:auto}
+.zoomBtns button{font:700 20px system-ui,sans-serif;width:40px;height:36px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;cursor:pointer;line-height:1}
+.zoomBtns button:disabled{opacity:.35;cursor:default}
 .note{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
 .list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -212,6 +216,7 @@ body.mapOpen{overflow:hidden}
     <div class="chart-head">
       <h2 id="routeTitle">Oslo – Moss</h2>
       <span class="mono" id="routeLen"></span>
+      <div class="zoomBtns"><button type="button" id="zoomOut" aria-label="Zoom ut">−</button><button type="button" id="zoomIn" aria-label="Zoom inn">+</button></div>
     </div>
     <div class="chart" id="chart"></div>
     <p class="msg" id="meStatus" role="status" style="margin-top:8px"></p>
@@ -608,26 +613,36 @@ body.mapOpen{overflow:hidden}
     return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p;
   }
 
+  var chartZoom = 1, ZMAX = 8;
+  // Zoom the route profile and keep the same spot in the middle of the view
+  function setChartZoom(z){
+    z = Math.max(1, Math.min(ZMAX, z));
+    if(Math.abs(z-chartZoom) < 0.01) return;
+    var host = $("chart"), frac = host.scrollWidth ? (host.scrollLeft + host.clientWidth/2)/host.scrollWidth : 0.5;
+    chartZoom = z; drawChart();
+    host.scrollLeft = frac*host.scrollWidth - host.clientWidth/2;
+    $("zoomOut").disabled = chartZoom <= 1; $("zoomIn").disabled = chartZoom >= ZMAX;
+  }
   function drawChart(){
     var host = $("chart"); host.textContent = "";
     var a = state.from, b = state.to, route = state.route;
     if(!a||!b||!route) return;
-    var L = route.len, C = state.corridor;
-    var W = 640, H = 190, ml = 46, mr = 18, mt = 22, mb = 40;
+    var L = route.len, C = state.corridor, z = chartZoom;
+    var W = Math.max(300, host.clientWidth || 340)*z, H = 190, ml = 22, mr = 22, mt = 22, mb = 40;
     var iw = W-ml-mr, ih = H-mt-mb, cy = mt+ih/2;
     var xs = function(km){ return ml + (km/L)*iw; };
     var ys = function(off){ return cy - (off/C)*(ih/2); };
     var svg = el("svg",{viewBox:"0 0 "+W+" "+H, role:"img", "aria-label":"Steder langs ruta fra "+a[0]+" til "+b[0]});
+    svg.style.width = W+"px";   // drawn 1:1 in screen pixels, so marks keep their size when zooming
     svg.appendChild(el("rect",{x:ml,y:mt,width:iw,height:ih,fill:"var(--band)",rx:4}));
-    var step = niceStep(L);
+    // Axis counts down the km left to the destination
+    var step = niceStep(L/z);
     for(var k=0;k<=L+0.001;k+=step){
-      var x = xs(k);
+      var x = xs(L-k);
       svg.appendChild(el("line",{x1:x,x2:x,y1:mt+ih,y2:mt+ih+5,stroke:"var(--ink-2)","stroke-width":1}));
       svg.appendChild(el("text",{x:x,y:mt+ih+18,"text-anchor":"middle",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},String(Math.round(k*10)/10)));
     }
-    svg.appendChild(el("text",{x:ml+iw,y:H-4,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"system-ui, sans-serif"},"km fra "+a[0]));
-    svg.appendChild(el("text",{x:ml-6,y:mt+9,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},fmtKm(C)+" km"));
-    svg.appendChild(el("text",{x:ml-6,y:mt+ih,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},fmtKm(C)+" km"));
+    svg.appendChild(el("text",{x:ml+iw,y:H-4,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"system-ui, sans-serif"},"km til "+b[0]));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--ink)","stroke-width":3,"stroke-linecap":"round"}));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--band)","stroke-width":1,"stroke-dasharray":"7 7"}));
     svg.appendChild(el("text",{x:ml,y:mt-7,"text-anchor":"start",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},a[0]));
@@ -1030,10 +1045,9 @@ body.mapOpen{overflow:hidden}
     if(!state.me) return "";
     if(!state.route) return "Posisjon funnet. Søk etter en rute for å se den på kartet.";
     var mp = place(state.route, state.me.lat, state.me.lon), off = Math.abs(mp.signed);
-    var offTxt = off < 1 ? Math.round(off*1000)+" m" : fmtKm(off)+" km";
-    var along = Math.max(0, Math.min(state.route.len, mp.along));
-    if(off > Math.max(state.corridor, 3)) return "Du er "+offTxt+" fra ruta (nærmeste punkt: "+fmtKm(along)+" km fra "+state.from[0]+").";
-    return "Du er "+fmtKm(along)+" km fra "+state.from[0]+", "+offTxt+" fra veien.";
+    var left = state.route.len - Math.max(0, Math.min(state.route.len, mp.along));
+    if(off > Math.max(state.corridor, 3)) return "Du er utenfor ruta. Fra nærmeste punkt på ruta er det ca. "+fmtKm(left)+" km til "+state.to[0]+".";
+    return "Du har ca. "+fmtKm(left)+" km igjen til "+state.to[0]+".";
   }
   function onMe(pos){
     var first = !state.me;
@@ -1078,6 +1092,24 @@ body.mapOpen{overflow:hidden}
   document.addEventListener("keydown", function(e){ if(e.key==="Escape" && fullWrap) fullToggle(fullWrap, false); });
 
   $("cancel").addEventListener("click", cancelSearch);
+  $("zoomIn").addEventListener("click", function(){ setChartZoom(chartZoom*2); });
+  $("zoomOut").addEventListener("click", function(){ setChartZoom(chartZoom/2); });
+  $("zoomOut").disabled = true;
+  var rsT = 0; window.addEventListener("resize", function(){ clearTimeout(rsT); rsT = setTimeout(drawChart, 150); });
+  // Pinch with two fingers on the profile to zoom it
+  (function(){
+    var host = $("chart"), d0 = 0, z0 = 1, raf = 0, want = 1;
+    function dist(t){ return Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY); }
+    host.addEventListener("touchstart", function(e){ if(e.touches.length === 2){ d0 = dist(e.touches); z0 = chartZoom; } }, { passive:true });
+    host.addEventListener("touchmove", function(e){
+      if(e.touches.length !== 2 || !d0) return;
+      e.preventDefault();
+      want = z0*dist(e.touches)/d0;
+      if(!raf) raf = requestAnimationFrame(function(){ raf = 0; setChartZoom(want); });
+    }, { passive:false });
+    host.addEventListener("touchend", function(e){ if(e.touches.length < 2) d0 = 0; });
+    host.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+  })();
   $("form").addEventListener("submit", function(ev){ ev.preventDefault(); search(); });
   $("swap").addEventListener("click", function(){
     var f = $("from"), t = $("to"), x = f.value; f.value = t.value; t.value = x;
