@@ -931,7 +931,7 @@ body.mapOpen{overflow:hidden}
     return (f<1.5?1:f<3.5?2:f<7.5?5:10)*p;
   }
 
-  var chartZoom = 1, ZMAX = 8;
+  var ZSTART = 5, chartZoom = ZSTART, ZMAX = 20;   // ZSTART 5 = the screen shows 20 % of the route
   // Zoom the route profile and keep the same spot in the middle of the view
   function setChartZoom(z){
     z = Math.max(1, Math.min(ZMAX, z));
@@ -939,14 +939,23 @@ body.mapOpen{overflow:hidden}
     var host = $("chart"), frac = host.scrollWidth ? (host.scrollLeft + host.clientWidth/2)/host.scrollWidth : 0.5;
     chartZoom = z; drawChart();
     host.scrollLeft = frac*host.scrollWidth - host.clientWidth/2;
-    $("zoomOut").disabled = chartZoom <= 1; $("zoomIn").disabled = chartZoom >= ZMAX;
+    syncZoomBtns();
+  }
+  function syncZoomBtns(){ $("zoomOut").disabled = chartZoom <= 1; $("zoomIn").disabled = chartZoom >= ZMAX; }
+  // New route: back to 20 % of the route, showing where you are (or the start)
+  function resetChartView(){
+    chartZoom = ZSTART; drawChart(); syncZoomBtns();
+    var host = $("chart"), r = state.route; if(!r) return;
+    var km = 0;
+    if(state.me){ var mp = place(r, state.me.lat, state.me.lon); if(mp.off <= Math.max(state.corridor, 3)) km = Math.max(0, Math.min(r.len, mp.along)); }
+    host.scrollLeft = (km/r.len)*host.scrollWidth - host.clientWidth/2;
   }
   function drawChart(){
     var host = $("chart"); host.textContent = "";
     var a = state.from, b = state.to, route = state.route;
     if(!a||!b||!route) return;
     var L = route.len, C = state.corridor, z = chartZoom;
-    var W = Math.max(300, host.clientWidth || 340)*z, H = 190, ml = 22, mr = 22, mt = 22, mb = 40;
+    var W = Math.max(300, host.clientWidth || 340)*z, H = 178, ml = 22, mr = 22, mt = 22, mb = 28;
     var iw = W-ml-mr, ih = H-mt-mb, cy = mt+ih/2;
     var xs = function(km){ return ml + (km/L)*iw; };
     var ys = function(off){ return cy - (off/C)*(ih/2); };
@@ -954,13 +963,12 @@ body.mapOpen{overflow:hidden}
     svg.style.width = W+"px";   // drawn 1:1 in screen pixels, so marks keep their size when zooming
     svg.appendChild(el("rect",{x:ml,y:mt,width:iw,height:ih,fill:"var(--band)",rx:4}));
     // Axis counts down the km left to the destination
-    var step = niceStep(L/z);
+    var step = Math.max(1, Math.round(niceStep(L/z)));   // whole km only
     for(var k=0;k<=L+0.001;k+=step){
       var x = xs(L-k);
       svg.appendChild(el("line",{x1:x,x2:x,y1:mt+ih,y2:mt+ih+5,stroke:"var(--ink-2)","stroke-width":1}));
-      svg.appendChild(el("text",{x:x,y:mt+ih+18,"text-anchor":"middle",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},String(Math.round(k*10)/10)));
+      svg.appendChild(el("text",{x:x,y:mt+ih+18,"text-anchor":"middle",fill:"var(--ink-2)","font-size":11,"font-family":"ui-monospace, monospace"},Math.round(k)+" km"));
     }
-    svg.appendChild(el("text",{x:ml+iw,y:H-4,"text-anchor":"end",fill:"var(--ink-2)","font-size":11,"font-family":"system-ui, sans-serif"},"km til "+b[0]));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--ink)","stroke-width":3,"stroke-linecap":"round"}));
     svg.appendChild(el("line",{x1:ml,x2:ml+iw,y1:cy,y2:cy,stroke:"var(--band)","stroke-width":1,"stroke-dasharray":"7 7"}));
     svg.appendChild(el("text",{x:ml,y:mt-7,"text-anchor":"start",fill:"var(--ink)","font-size":13,"font-weight":600,"font-family":"system-ui, sans-serif"},a[0]));
@@ -1332,7 +1340,7 @@ body.mapOpen{overflow:hidden}
     st.textContent = "Henter veien…";
     getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); }).then(function(route){
       if(tok !== state.token) return;
-      state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); drawChart(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
+      state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); resetChartView(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
       var ks = KINDS.filter(function(k){ return state.sel[k]; });
       st.textContent = "Henter "+ks.map(function(k){ return NAMES[k][1]; }).join(", ")+" langs ruta…";
       return loadMany(ks).then(function(){
@@ -1464,7 +1472,7 @@ body.mapOpen{overflow:hidden}
   $("cancel").addEventListener("click", cancelSearch);
   $("zoomIn").addEventListener("click", function(){ setChartZoom(chartZoom*2); });
   $("zoomOut").addEventListener("click", function(){ setChartZoom(chartZoom/2); });
-  $("zoomOut").disabled = true;
+  syncZoomBtns();
   var rsT = 0; window.addEventListener("resize", function(){ clearTimeout(rsT); rsT = setTimeout(drawChart, 150); });
   // Pinch with two fingers on the profile to zoom it
   (function(){
