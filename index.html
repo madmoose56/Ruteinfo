@@ -101,6 +101,12 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .idx.ev{background:#6D28D9;color:#fff}
 .idx.rest{background:#0E7490;color:#fff}
 .rm span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:14px 14px 4px 4px;background:#0E7490;color:#fff;border:2px solid #fff;font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.idx.svvrest{background:#1E3A8A;color:#fff}
+.idx.svvmin{background:#78350F;color:#fff}
+.vr span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:14px 14px 4px 4px;background:#1E3A8A;color:#fff;border:2px solid #fff;font:600 10px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.06em;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.vm span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:4px;background:#78350F;color:#fff;border:2px solid #fff;font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em;box-shadow:0 1px 5px rgba(0,0,0,.45)}
+.legend .vrs{width:12px;height:12px;background:#1E3A8A;border-radius:6px 6px 2px 2px}
+.legend .vms{width:12px;height:12px;background:#78350F;border-radius:2px}
 .legend .rs{width:12px;height:12px;background:#0E7490;border-radius:6px 6px 2px 2px}
 .idx.act{background:#BE185D;color:#fff}
 .tm span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:14px 14px 14px 3px;background:#BE185D;color:#fff;border:2px solid #fff;font:600 11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:-.04em;box-shadow:0 1px 5px rgba(0,0,0,.45)}
@@ -214,6 +220,8 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
           <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
           <button type="button" data-k="rest" aria-pressed="false">Rasteplass</button>
+          <button type="button" data-k="svvrest" aria-pressed="false">Rasteplass (Vegvesen)</button>
+          <button type="button" data-k="svvmin" aria-pressed="false">Vegminner (Vegvesen)</button>
           <button type="button" data-c="family" aria-pressed="false">Familie</button>
           <button type="button" data-c="sport" aria-pressed="false">Friluft og sport</button>
           <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
@@ -229,7 +237,7 @@ body.mapOpen{overflow:hidden}
   <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
-      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lgRest" hidden><i class="rs"></i>Rasteplass</span><span id="lg_family" hidden><i class="tg"></i>Familie</span><span id="lg_sport" hidden><i class="tg"></i>Friluft og sport</span><span id="lg_culture" hidden><i class="tg"></i>Kultur</span><span id="lg_food" hidden><i class="tg"></i>Mat og drikke</span></div>
+      <div class="legend"><span><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lgRest" hidden><i class="rs"></i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs"></i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms"></i>Vegminne (Vegvesen)</span><span id="lg_family" hidden><i class="tg"></i>Familie</span><span id="lg_sport" hidden><i class="tg"></i>Friluft og sport</span><span id="lg_culture" hidden><i class="tg"></i>Kultur</span><span id="lg_food" hidden><i class="tg"></i>Mat og drikke</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
       </div>
       <div id="mapWrap">
@@ -278,6 +286,16 @@ body.mapOpen{overflow:hidden}
       <div class="list-head fuelhead"><h2 id="restCount">Rasteplasser</h2></div>
       <ol id="restList"></ol>
       <p class="empty" id="restEmpty" hidden></p>
+    </div>
+    <div id="svvrestPart" hidden>
+      <div class="list-head fuelhead"><h2 id="svvrestCount">Rasteplasser (Vegvesen)</h2></div>
+      <ol id="svvrestList"></ol>
+      <p class="empty" id="svvrestEmpty" hidden></p>
+    </div>
+    <div id="svvminPart" hidden>
+      <div class="list-head fuelhead"><h2 id="svvminCount">Vegminner (Vegvesen)</h2></div>
+      <ol id="svvminList"></ol>
+      <p class="empty" id="svvminEmpty" hidden></p>
     </div>
     <div id="actPart" hidden>
       <div class="list-head fuelhead"><h2 id="actCount">Aktiviteter</h2></div>
@@ -633,10 +651,11 @@ body.mapOpen{overflow:hidden}
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if(isIOS && !isStandalone) $("install").hidden = false;
 
-  var KINDS = ["hotel","fuel","ev","rest","act"], PLAIN = ["hotel","fuel","ev","rest"];
-  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], act:["aktivitet","aktiviteter","Aktiviteter"] };
+  var KINDS = ["hotel","fuel","ev","rest","svvrest","svvmin","act"], PLAIN = ["hotel","fuel","ev","rest","svvrest","svvmin"];
+  var SVV = { svvrest:39, svvmin:786 };   // kinds fetched from Statens vegvesen (NVDB object type ids), not OpenStreetMap
+  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser (Vegvesen)"], svvmin:["vegminne","vegminner","Vegminner (Vegvesen)"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
-  var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,rest:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,rest:false,act:false},
+  var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,rest:null,svvrest:null,svvmin:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,rest:false,svvrest:false,svvmin:false,act:false},
     me:null, view:null, started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
 
   // Places matching the typed letters: names starting with them first, cities and big places first
@@ -932,7 +951,7 @@ body.mapOpen{overflow:hidden}
   }
   function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]); }) : []; }
   function byAlong(p,q){ return p.along-q.along; }
-  var LETTER = { hotel:"H", fuel:"B", ev:"E", rest:"R", family:"F", sport:"S", culture:"K", food:"M" };
+  var LETTER = { hotel:"H", fuel:"B", ev:"E", rest:"R", svvrest:"RV", svvmin:"V", family:"F", sport:"S", culture:"K", food:"M" };
   // "H1", "B2", "K3" … numbered along the route, activities counted per type
   function labels(){
     var out = {};
@@ -1017,6 +1036,8 @@ body.mapOpen{overflow:hidden}
         else if(k === "fuel") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:5,fill:"#C2410C",stroke:"var(--surface)","stroke-width":1.5});
         else if(k === "act") mark = el("polygon",{points:[cx,cyy-17,cx+16,cyy+11,cx-16,cyy+11].join(","),fill:"#BE185D",stroke:"var(--surface)","stroke-width":1.5,"stroke-linejoin":"round"});
         else if(k === "rest") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:9,fill:"#0E7490",stroke:"var(--surface)","stroke-width":1.5});
+        else if(k === "svvrest") mark = el("rect",{x:cx-14,y:cyy-11,width:28,height:22,rx:9,fill:"#1E3A8A",stroke:"var(--surface)","stroke-width":1.5});
+        else if(k === "svvmin") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:3,fill:"#78350F",stroke:"var(--surface)","stroke-width":1.5});
         else mark = el("polygon",{points:[cx,cyy-15,cx+15,cyy,cx,cyy+15,cx-15,cyy].join(","),fill:"#6D28D9",stroke:"var(--surface)","stroke-width":1.5,"stroke-linejoin":"round"});
         svg.appendChild(mark);
         svg.appendChild(el("text",{x:cx,y:cyy+(k==="act"?6.5:3.8),"text-anchor":"middle",fill:k==="hotel"?"var(--accent-ink)":"#fff","font-size":10.5,"font-weight":700,"letter-spacing":"-.4","font-family":"ui-monospace, monospace"},lab[h.id]));
@@ -1055,7 +1076,7 @@ body.mapOpen{overflow:hidden}
            "&waypoints="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate";
   }
   function mkIcon(kind, n){
-    return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":kind==="rest"?"rm":kind==="act"?"tm":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span>"+n+"</span>",
+    return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":kind==="rest"?"rm":kind==="svvrest"?"vr":kind==="svvmin"?"vm":kind==="act"?"tm":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span>"+n+"</span>",
       iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] });
   }
   function popupFor(h){
@@ -1072,7 +1093,7 @@ body.mapOpen{overflow:hidden}
     }
     link(dirUrl(h), "Veibeskrivelse");
     if(isIOS) link(gDirUrl(h), "Google Maps");
-    if(h.kind !== "hotel") link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
+    if(h.kind !== "hotel" && !SVV[h.kind]) link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
     else link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
     if(h.web) link(h.web, "Nettside");
     d.appendChild(l);
@@ -1081,7 +1102,7 @@ body.mapOpen{overflow:hidden}
   function updateMap(){
     if(!lmap || !state.route || !state.from) return;
     $("pairLbl").textContent = state.from[0]+" → "+state.to[0];
-    $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev; $("lgRest").hidden = !state.sel.rest;
+    $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev; $("lgRest").hidden = !state.sel.rest; $("lgSvvrest").hidden = !state.sel.svvrest; $("lgSvvmin").hidden = !state.sel.svvmin;
     CATS.forEach(function(c){ $("lg_"+c).hidden = !state.cats[c]; });
     mapLayer.clearLayers(); markerById = {};
     var ll = state.route.latlons.map(function(p){ return [p[0],p[1]]; });
@@ -1123,7 +1144,7 @@ body.mapOpen{overflow:hidden}
     link(dirUrl(h), "Veibeskrivelse");
     if(isIOS) link(gDirUrl(h), "Google Maps");
     var via = viaUrl(h); if(via) link(via, "Rute via stedet");
-    link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
+    if(!SVV[h.kind]) link("https://www.openstreetmap.org/?mlat="+h.lat+"&mlon="+h.lon+"#map=17/"+h.lat+"/"+h.lon, "Åpne i OpenStreetMap");
     if(h.kind === "hotel") link("https://www.booking.com/searchresults.no.html?ss="+encodeURIComponent(h.name+(h.city?" "+h.city:"")), "Søk på Booking");
     if(h.web) link(h.web, "Nettside");
     mid.appendChild(links);
@@ -1146,11 +1167,12 @@ body.mapOpen{overflow:hidden}
     $(kind+"Count").textContent = items ? shown.length+" "+(shown.length===1?nm[0]:nm[1]) : nm[2];
     if(!items){ empty.hidden = false; empty.textContent = loadMsg(kind); return; }
     empty.hidden = shown.length > 0;
-    if(!shown.length) empty.textContent = "Ingen "+nm[1]+" innenfor "+corrLabel()+" fra ruta i OpenStreetMap. Prøv en bredere avstand.";
+    if(!shown.length) empty.textContent = "Ingen "+nm[1]+" innenfor "+corrLabel()+" fra ruta i "+(SVV[kind] ? "Vegvesenets vegdatabank" : "OpenStreetMap")+". Prøv en bredere avstand.";
     var lab = labels();
     shown.forEach(function(h){ list.appendChild(buildItem(h, lab[h.id], routeCtx)); });
   }
 
+  var CHIP_LBL = { svvrest:"Rasteplass SVV", svvmin:"Vegminner SVV" };
   var CAT_LBL = { family:"Familie", sport:"Friluft og sport", culture:"Kultur", food:"Mat og drikke" };
   // The result chips double as the list chooser when several kinds are selected
   function chipKeys(){
@@ -1170,7 +1192,7 @@ body.mapOpen{overflow:hidden}
     var box = $("hits"); if(!box) return;
     var ks = chipKeys(), cur = curView(), acts = state.sel.act ? visible("act") : [], html = "";
     ks.forEach(function(key){
-      var kind = key.charAt(0)==="c" ? "act" : key, label = kind==="act" ? CAT_LBL[key.slice(2)] : NAMES[kind][2].replace("Ladestasjoner","Elbil-lading").replace("Bensinstasjoner","Bensin");
+      var kind = key.charAt(0)==="c" ? "act" : key, label = kind==="act" ? CAT_LBL[key.slice(2)] : CHIP_LBL[kind] || NAMES[kind][2].replace("Ladestasjoner","Elbil-lading").replace("Bensinstasjoner","Bensin");
       var n = kind==="act" ? acts.filter(function(h){ return h.cat===key.slice(2); }).length : visible(kind).length;
       var body = (state.err[kind] && !state.items[kind]) ? label+": feil" : !state.items[kind] ? label+": …" : label+": <b>"+n+"</b>";
       html += '<button type="button" data-v="'+key+'" aria-pressed="'+(key===cur?"true":"false")+'"'+((state.err[kind] && !state.items[kind])?' class="bad"':"")+'>'+body+'</button>';
@@ -1219,7 +1241,7 @@ body.mapOpen{overflow:hidden}
       }
       arr.forEach(function(h){ list.appendChild(buildItem(h, idx[h.id], routeCtx)); });
     }
-    renderExtra("fuel"); renderExtra("ev"); renderExtra("rest"); renderExtra("act");
+    renderExtra("fuel"); renderExtra("ev"); renderExtra("rest"); renderExtra("svvrest"); renderExtra("svvmin"); renderExtra("act");
     updateHits();
     drawChart();
     updateMap();
@@ -1330,10 +1352,80 @@ body.mapOpen{overflow:hidden}
   // Fetch one kind of place along the current route; always resolves (errors are kept in state.err)
   function loadKind(kind){ return loadMany([kind]); }
   // One combined request for several kinds (the public servers are slow, so fewer round trips is better)
+  // ---- Statens vegvesen (NVDB): rest areas and road heritage along the route ----
+  var NVDB = "https://nvdbapiles.atlas.vegvesen.no/vegobjekter/api/v4/vegobjekter/";
+  // Route cut into ~40 km boxes (lon,lat order for NVDB)
+  function nvdbBoxes(route, radiusKm){
+    var pad = radiusKm + 1, out = [], L = route.latlons, start = 0, i;
+    function add(a, b){
+      var la0 = 90, la1 = -90, lo0 = 180, lo1 = -180, k;
+      for(k=a;k<=b;k++){ var q = L[k]; if(q[0]<la0) la0=q[0]; if(q[0]>la1) la1=q[0]; if(q[1]<lo0) lo0=q[1]; if(q[1]>lo1) lo1=q[1]; }
+      var dLa = pad/111.32, dLo = pad/(111.32*Math.cos(((la0+la1)/2)*Math.PI/180));
+      out.push([lo0-dLo, la0-dLa, lo1+dLo, la1+dLa].map(function(v){ return v.toFixed(4); }).join(","));
+    }
+    for(i=1;i<L.length;i++){ if(route.cum[i] - route.cum[start] >= 40){ add(start, i); start = i; } }
+    if(start < L.length-1 || !out.length) add(start, L.length-1);
+    return out;
+  }
+  // WKT from NVDB with srid 4326 is "lat lon [z]"
+  function wktPoints(wkt){
+    var nums = String(wkt||"").replace(/^[A-Z ]+/,"").match(/-?\d+(\.\d+)?(\s+-?\d+(\.\d+)?)+/g) || [];
+    return nums.map(function(t){ var v = t.trim().split(/\s+/); return [parseFloat(v[0]), parseFloat(v[1])]; });
+  }
+  function nvdbItem(o, kind, route){
+    var e = {}; (o.egenskaper||[]).forEach(function(x){ if(x.verdi != null) e[x.navn] = x.verdi; });
+    var pts = wktPoints(o.geometri && o.geometri.wkt);
+    if(!pts.length) return null;
+    // the point of the object closest to the route (long old roads can cross it)
+    var step = Math.max(1, Math.floor(pts.length/40)), best = null;
+    for(var i=0;i<pts.length;i+=step){ var pl = place(route, pts[i][0], pts[i][1]); if(!best || pl.off < best.pl.off) best = { p:pts[i], pl:pl }; }
+    var info = [], web = "", type = "";
+    if(kind === "svvrest"){
+      type = e["Type"] || "Rasteplass";
+      if(e["Drikkevann"] === "Ja") info.push("drikkevann");
+      if(String(e["Dusj"]||"").indexOf("Ja") === 0) info.push("dusj");
+      if(e["Strømuttak"] === "Ja") info.push("strøm");
+      var ch = (+e["Antall oppstillingspl. med lading, små kjt."]||0) + (+e["Antall oppstillingspl. med lading, store kjt."]||0);
+      if(ch) info.push(ch+" ladeplasser");
+      var big = +e["Antall oppstillingspl. store kjt."]||0; if(big) info.push(big+" plasser for store kjøretøy");
+      if(e["Vinterstengning"] === "Helt vinterstengt") info.push("vinterstengt"+(e["Helt vinterstengt, fra dato"] ? " "+e["Helt vinterstengt, fra dato"].split("-").reverse().join(".")+"–"+String(e["Helt vinterstengt, til dato"]||"").split("-").reverse().join(".") : ""));
+    } else {
+      type = e["Enkeltminneart"] || "Vegminne";
+      if(e["Datering"]) info.push("fra "+e["Datering"]);
+      if(e["Status"] === "Ute av bruk/nedlagt") info.push("ute av bruk");
+      var w = String(e["Link til kulturminnesøk"]||"").trim();
+      if(/kulturminnesok\.no/.test(w)) web = "https://"+w.replace(/^https?:\/\//,"");
+    }
+    return { id:"svv"+o.id, kind:kind, cat:"", name:e["Navn"] || type, type:type, stars:0, open24:false, info:info, city:"", addr:"",
+      lat:best.p[0], lon:best.p[1], web:web, phone:"", along:best.pl.along, off:best.pl.off, signed:best.pl.signed };
+  }
+  function loadSvv(kind, route){
+    var boxes = nvdbBoxes(route, state.qKm), seen = {}, out = [], ok = 0, i = 0;
+    function one(box){
+      var url = NVDB+SVV[kind]+"?kartutsnitt="+box+"&srid=4326&inkluder=egenskaper,geometri&antall=1000";
+      return fetchTimeout(url, { headers:{ "Accept":"application/json", "X-Client":"Ruteinfo" } }, 30000)
+        .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+        .then(function(j){ ok++; (j.objekter||[]).forEach(function(o){ if(seen[o.id]) return; seen[o.id] = 1; var h = nvdbItem(o, kind, route); if(h) out.push(h); }); }, function(){});
+    }
+    function next(){ if(i >= boxes.length) return Promise.resolve(); var b = boxes.slice(i, i+4); i += 4; return Promise.all(b.map(one)).then(next); }
+    return next().then(function(){ if(!ok) throw new Error("vegvesen"); return out; });
+  }
   function loadMany(kinds){
     var tok = state.token, route = state.route;
     kinds = kinds.filter(function(k){ return !state.items[k] && !state.loading[k]; });
     if(!kinds.length) return Promise.resolve();
+    var svvKinds = kinds.filter(function(k){ return SVV[k]; });
+    kinds = kinds.filter(function(k){ return !SVV[k]; });
+    var svvDone = Promise.all(svvKinds.map(function(k){
+      var ser = state.serial[k] = (state.serial[k]||0) + 1; state.loading[k] = true; state.err[k] = false;
+      var live = function(){ return tok === state.token && ser === state.serial[k]; };
+      return loadSvv(k, route).then(function(items){ if(live()) state.items[k] = items; }, function(){ if(live()) state.err[k] = true; })
+        .then(function(){ if(live()) state.loading[k] = false; });
+    }));
+    if(!kinds.length) return svvDone;
+    return Promise.all([svvDone, loadOsm(kinds, tok, route)]);
+  }
+  function loadOsm(kinds, tok, route){
     var sers = {};
     kinds.forEach(function(k){ sers[k] = state.serial[k] = (state.serial[k]||0) + 1; state.loading[k] = true; state.err[k] = false; });
     var live = function(k){ return tok === state.token && sers[k] === state.serial[k]; };
@@ -1371,7 +1463,7 @@ body.mapOpen{overflow:hidden}
     var st = $("status"); st.className = "msg";
     setBusy(true);
     var p = { a:a, b:b };
-    var tok = ++state.token; state.items = { hotel:null, fuel:null, ev:null, rest:null, act:null }; state.err = {}; state.loading = {}; state.started = false;
+    var tok = ++state.token; state.items = { hotel:null, fuel:null, ev:null, rest:null, svvrest:null, svvmin:null, act:null }; state.err = {}; state.loading = {}; state.started = false;
     state.from = p.a; state.to = p.b; state.qKm = Math.max(state.corridor, 3); $("results").hidden = true;
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = "Henter veien…";
