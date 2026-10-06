@@ -118,6 +118,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 .sugg button:last-child{border-bottom:0}
 .sugg button:hover{background:var(--band)}
 .sugg small{font-size:12px;color:var(--ink-2);white-space:nowrap}
+.suggHead{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);padding:8px 12px 4px;background:var(--bg);border-bottom:1px solid var(--line)}
 .fromMode button{font-size:13px;padding:5px 8px;min-height:32px;flex:1 1 auto;white-space:nowrap;text-transform:none;letter-spacing:0}
 #from:disabled{color:var(--ink);opacity:1;-webkit-text-fill-color:var(--ink);background:var(--band)}
 .swap:disabled{opacity:.35;cursor:default}
@@ -605,7 +606,7 @@ body.mapOpen{overflow:hidden}
   function startRadiusKm(place){
     if(place[3]==="pos") return 1.5;
     var r = START_RADIUS[place[0].toLowerCase()];
-    return r || (place[3]==="tettsted" ? 4 : 6);
+    return r || (place[3]==="by" ? 6 : place[3]==="tettsted" ? 4 : 2);   // smaller places from Kartverket: 2 km
   }
 
 
@@ -630,10 +631,48 @@ body.mapOpen{overflow:hidden}
     function big(a,b){ return (b[3]==="by")-(a[3]==="by") || b[4]-a[4] || a[0].localeCompare(b[0],"nb"); }
     return pre.sort(big).concat(mid.sort(big)).slice(0, max||8);
   }
+  // Places picked from Kartverket's place-name register (name with kommune -> place)
+  var REMOTE = {};
   function findCity(txt){
     var q = (txt||"").trim().toLowerCase();
     if(!q) return null;
-    return BY[q] || matchPlaces(q, 1)[0] || null;
+    return BY[q] || REMOTE[q] || matchPlaces(q, 1)[0] || null;
+  }
+  // Kartverket stedsnavn: settlements and other places you can drive to, best kinds first
+  var KV_TYPES = ["by","tettsted","bydel","tettsteddel","tettbebyggelse","grend","bygdelagBygd","poststed","boligfelt","hyttefelt",
+    "gard","navnegard","stasjon","ferjekai","flyplass","turisthytte","campingplass","alpinanlegg","severdighet","fjellovergang"];
+  var KV_LABEL = { by:"by", tettsted:"tettsted", bydel:"bydel", tettsteddel:"tettsteddel", tettbebyggelse:"tettbebyggelse", grend:"grend",
+    bygdelagBygd:"bygd", poststed:"poststed", boligfelt:"boligfelt", hyttefelt:"hyttefelt", gard:"gard", navnegard:"gard", stasjon:"stasjon",
+    ferjekai:"ferjekai", flyplass:"flyplass", turisthytte:"turisthytte", campingplass:"camping", alpinanlegg:"alpinanlegg",
+    severdighet:"severdighet", fjellovergang:"fjellovergang", kommune:"kommune" };
+  var KV_NAME2CODE = { "By":"by","Tettsted":"tettsted","Bydel":"bydel","Tettsteddel":"tettsteddel","Tettbebyggelse":"tettbebyggelse","Grend":"grend",
+    "Bygdelag (bygd)":"bygdelagBygd","Poststed":"poststed","Boligfelt":"boligfelt","Hyttefelt":"hyttefelt","Gard":"gard","Navnegard":"navnegard",
+    "Stasjon":"stasjon","Ferjekai":"ferjekai","Flyplass":"flyplass","Turisthytte":"turisthytte","Campingplass":"campingplass",
+    "Alpinanlegg":"alpinanlegg","Severdighet":"severdighet","Fjellovergang":"fjellovergang","Kommune":"kommune" };
+  function kvSearch(q, signal){
+    // The API takes at most 10 kinds per request, so ask twice at the same time
+    function ask(types){
+      var url = "https://api.kartverket.no/stedsnavn/v1/sted?sok="+encodeURIComponent(q+"*")+"&utkoordsys=4258&treffPerSide=30&side=1"+
+        types.map(function(t){ return "&navneobjekttype="+t; }).join("");
+      return fetch(url, { signal:signal }).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+        .then(function(j){ return j.navn||[]; }, function(e){ if(e && e.name === "AbortError") throw e; return []; });
+    }
+    return Promise.all([ask(KV_TYPES.slice(0,10)), ask(KV_TYPES.slice(10,20))]).then(function(res){
+      var seen = {}, out = [];
+      res[0].concat(res[1]).forEach(function(n){
+        var nm = n.stedsnavn && n.stedsnavn[0] && n.stedsnavn[0]["skrivemåte"], pt = n.representasjonspunkt;
+        if(!nm || !pt) return;
+        var code = KV_NAME2CODE[String(n.navneobjekttype||"").trim()] || "", kom = n.kommuner && n.kommuner[0] ? n.kommuner[0].kommunenavn : "";
+        var label = kom && kom !== nm ? nm+" ("+kom+")" : nm, key = label.toLowerCase();
+        if(seen[key]) return; seen[key] = 1;
+        out.push({ label:label, name:nm, lat:pt.nord, lon:pt["øst"], kind:KV_LABEL[code]||String(n.navneobjekttype||"").toLowerCase(), rank:KV_TYPES.indexOf(code) });
+      });
+      var ql = q.toLowerCase();
+      out.sort(function(a,b){
+        return (b.name.toLowerCase()===ql)-(a.name.toLowerCase()===ql) || (a.rank<0?99:a.rank)-(b.rank<0?99:b.rank) || a.label.localeCompare(b.label,"nb");
+      });
+      return out;
+    });
   }
 
   function fmtKm(x){ return x.toLocaleString("nb-NO",{maximumFractionDigits:1,minimumFractionDigits:x<10?1:0}); }
@@ -1373,22 +1412,43 @@ body.mapOpen{overflow:hidden}
 
   // Suggestions under Fra and Til while typing
   function setupSuggest(inputId, boxId){
-    var inp = $(inputId), box = $(boxId), items = [], hideT = 0;
+    var inp = $(inputId), box = $(boxId), items = [], hideT = 0, kvT = 0, kvCtl = null;
     function close(){ box.hidden = true; inp.setAttribute("aria-expanded","false"); }
+    function addRow(label, kind, pick){
+      var b = document.createElement("button"); b.type = "button"; b.setAttribute("role","option");
+      var n = document.createElement("span"); n.textContent = label; b.appendChild(n);
+      var t = document.createElement("small"); t.textContent = kind; b.appendChild(t);
+      b.addEventListener("mousedown", function(e){ e.preventDefault(); });   // keep focus in the field
+      b.addEventListener("click", function(){ pick(); close(); inp.blur(); });
+      box.appendChild(b);
+    }
+    function show(){ box.hidden = !box.hasChildNodes(); inp.setAttribute("aria-expanded", box.hidden ? "false" : "true"); }
     function render(){
+      clearTimeout(kvT); if(kvCtl){ try{ kvCtl.abort(); }catch(_){} kvCtl = null; }
       if(inp.disabled){ close(); return; }
-      items = matchPlaces(inp.value, 8);
-      if(!items.length || (items.length === 1 && items[0][0].toLowerCase() === inp.value.trim().toLowerCase())){ close(); return; }
+      var q = inp.value.trim();
+      items = matchPlaces(q, 8);
       box.textContent = "";
-      items.forEach(function(c){
-        var b = document.createElement("button"); b.type = "button"; b.setAttribute("role","option");
-        var n = document.createElement("span"); n.textContent = c[0]; b.appendChild(n);
-        var t = document.createElement("small"); t.textContent = c[3]; b.appendChild(t);
-        b.addEventListener("mousedown", function(e){ e.preventDefault(); });   // keep focus in the field
-        b.addEventListener("click", function(){ inp.value = c[0]; close(); inp.blur(); });
-        box.appendChild(b);
-      });
-      box.hidden = false; inp.setAttribute("aria-expanded","true");
+      if(!(items.length === 1 && items[0][0].toLowerCase() === q.toLowerCase())){
+        items.forEach(function(c){ addRow(c[0], c[3], function(){ inp.value = c[0]; }); });
+      }
+      show();
+      // More places from Kartverket (needs network), after a short pause in the typing
+      if(q.length < 3 || navigator.onLine === false) return;
+      kvT = setTimeout(function(){
+        kvCtl = new AbortController();
+        kvSearch(q, kvCtl.signal).then(function(list){
+          if(inp.value.trim() !== q || document.activeElement !== inp) return;
+          var near = function(r){ return items.some(function(c){ return c[0].toLowerCase() === r.name.toLowerCase() && Math.abs(c[1]-r.lat) < 0.05 && Math.abs(c[2]-r.lon) < 0.1; }); };
+          var extra = list.filter(function(r){ return !near(r); }).slice(0, 10);
+          if(!extra.length) return;
+          var h = document.createElement("div"); h.className = "suggHead"; h.textContent = "Flere steder (Kartverket)"; box.appendChild(h);
+          extra.forEach(function(r){
+            addRow(r.label, r.kind, function(){ REMOTE[r.label.toLowerCase()] = [r.label, r.lat, r.lon, r.kind, 0]; inp.value = r.label; });
+          });
+          show();
+        }).catch(function(){});
+      }, 350);
     }
     inp.addEventListener("input", render);
     inp.addEventListener("focus", function(){ clearTimeout(hideT); if(inp.value.trim()) render(); });
