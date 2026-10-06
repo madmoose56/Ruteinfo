@@ -136,7 +136,8 @@ button.idx{border:0;padding:0;cursor:pointer}
 .mapFull .mapBack{display:block}
 body.mapOpen{overflow:hidden}
 .topbar{position:sticky;top:0;z-index:2000;background:var(--bg);margin-inline:-16px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px 8px}
-.topbar .hits{margin-top:8px}
+/* The chips in the locked bar hang below it without taking room, so the page never jumps when they appear */
+.topbar .hits{position:absolute;left:0;right:0;top:100%;margin:0;padding:0 16px 8px;background:var(--bg);box-shadow:0 6px 8px -6px rgba(0,0,0,.15)}
 .topbar .hits[hidden]{display:none}
 #results{padding-bottom:60px;scroll-margin-top:130px}
 .toTop{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:3000;background:#14423A;color:#fff;border:2px solid #fff;border-radius:999px;padding:10px 16px;font:700 15px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
