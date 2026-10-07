@@ -132,7 +132,6 @@ button.idx{border:0;padding:0;cursor:pointer}
 .ac{position:relative}
 .chainBox{margin-top:12px}
 .chainBox[hidden]{display:none}
-.chainBox input{-webkit-appearance:none;appearance:none}
 .chainChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0}
 .chainChips:empty{display:none}
 .chainChips button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:6px 10px;min-height:36px;cursor:pointer}
@@ -237,17 +236,14 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
         </div>
       </div>
-      <div class="lbl chainBox" id="chainBox_hotel" data-k="hotel">Hotellkjede eller navn (valgfritt)
-        <input type="search" placeholder="f.eks. Best Western" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Hotellkjede eller navn">
-        <div class="chainChips" aria-label="Kjeder langs ruta"></div>
+      <div class="lbl chainBox" id="chainBox_hotel" data-k="hotel" hidden>Listefilter – hotell
+        <div class="chainChips" aria-label="Listefilter hotell"></div>
       </div>
-      <div class="lbl chainBox" id="chainBox_fuel" data-k="fuel">Bensinkjede eller navn (valgfritt)
-        <input type="search" placeholder="f.eks. Circle K" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Bensinkjede eller navn">
-        <div class="chainChips" aria-label="Kjeder langs ruta"></div>
+      <div class="lbl chainBox" id="chainBox_fuel" data-k="fuel" hidden>Listefilter – bensin
+        <div class="chainChips" aria-label="Listefilter bensin"></div>
       </div>
-      <div class="lbl chainBox" id="chainBox_ev" data-k="ev">Ladeoperatør eller navn (valgfritt)
-        <input type="search" placeholder="f.eks. Tesla" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Ladeoperatør eller navn">
-        <div class="chainChips" aria-label="Kjeder langs ruta"></div>
+      <div class="lbl chainBox" id="chainBox_ev" data-k="ev" hidden>Listefilter – elbil-lading
+        <div class="chainChips" aria-label="Listefilter elbil-lading"></div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
       <div class="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
@@ -1000,6 +996,7 @@ body.mapOpen{overflow:hidden}
       found.forEach(function(x){ html += '<button type="button" data-c="'+x[0]+'" aria-pressed="'+(q===chainNorm(x[0])?"true":"false")+'">'+x[0]+' ('+x[1]+')</button>'; });
       box.innerHTML = state.started ? html : "";
     });
+    syncChainBox();
   }
   function setChain(k, v){
     chainQ[k] = chainNorm(v);
@@ -1418,15 +1415,13 @@ body.mapOpen{overflow:hidden}
     return { key:key, isCat:isCat, on:on };
   }
   Object.keys(CHAINS).forEach(function(k){
-    var bx = $("chainBox_"+k), inp = bx.querySelector("input"), t = 0;
-    inp.addEventListener("input", function(){ var v = inp.value; clearTimeout(t); t = setTimeout(function(){ setChain(k, v); }, 250); });
-    inp.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); inp.blur(); setChain(k, inp.value); } });
-    bx.querySelector(".chainChips").addEventListener("click", function(e){
+    $("chainBox_"+k).querySelector(".chainChips").addEventListener("click", function(e){
       var b = e.target.closest("button"); if(!b) return;
-      inp.value = b.dataset.c; setChain(k, b.dataset.c);
+      setChain(k, b.dataset.c);
     });
   });
-  function syncChainBox(){ Object.keys(CHAINS).forEach(function(k){ $("chainBox_"+k).hidden = !state.sel[k]; }); }
+  // A list filter shows once a search has found chains for that kind
+  function syncChainBox(){ Object.keys(CHAINS).forEach(function(k){ $("chainBox_"+k).hidden = !state.sel[k] || !$("chainBox_"+k).querySelector(".chainChips").hasChildNodes(); }); }
   syncChainBox();
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
