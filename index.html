@@ -174,6 +174,10 @@ body.mapOpen{overflow:hidden}
 /* The chips in the locked bar hang below it without taking room, so the page never jumps when they appear */
 .topbar .hits{position:absolute;left:0;right:0;top:100%;margin:0;padding:0 16px 8px;background:var(--bg);box-shadow:0 6px 8px -6px rgba(0,0,0,.15)}
 .topbar .hits[hidden]{display:none}
+.topRow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* which search is on, shown in the locked bar once the choices have scrolled away */
+.modeBadge{font:700 14px system-ui,sans-serif;padding:7px 14px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink);cursor:pointer;flex:none}
+.modeBadge[hidden]{display:none}
 #results{padding-bottom:60px;scroll-margin-top:130px}
 .toTop{position:fixed;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:3000;background:#14423A;color:#fff;border:2px solid #fff;border-radius:999px;padding:10px 16px;font:700 15px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
 .toTop[hidden],body.mapOpen .toTop{display:none}
@@ -198,7 +202,7 @@ body.mapOpen{overflow:hidden}
 <div id="errBox" hidden></div>
 <script>(function(){function show(m){var b=document.getElementById("errBox");if(b){b.hidden=false;b.textContent="Teknisk feil: "+m;}}window.addEventListener("error",function(e){show((e.message||"ukjent")+(e.lineno?" (linje "+e.lineno+")":""));});window.addEventListener("unhandledrejection",function(e){show(String(e.reason&&e.reason.message||e.reason));});})();</script>
 <header class="topbar">
-    <h1>Ruteinfo</h1>
+    <div class="topRow"><h1>Ruteinfo</h1><button type="button" class="modeBadge" id="modeBadge" hidden aria-label="Søket gjelder Nær meg. Trykk for å gå til toppen">Nær meg</button></div>
     <div class="hits" id="hitsTop" aria-label="Velg liste" hidden></div>
 </header>
 <p class="sub" style="margin-top:-12px">Hoteller, bensin, elbil-lading og severdigheter langs veien mellom to steder i Norge.</p>
@@ -1321,7 +1325,9 @@ body.mapOpen{overflow:hidden}
     var h1Bottom = $("hitsTop").previousElementSibling.getBoundingClientRect().bottom;
     $("toTop").hidden = $("form").getBoundingClientRect().bottom > h1Bottom;
     $("hitsTop").hidden = !$("hits").hasChildNodes() || $("hits").getBoundingClientRect().bottom > h1Bottom + 8;
+    $("modeBadge").hidden = !state.near || $("hitsTop").hidden;
   }
+  $("modeBadge").addEventListener("click", function(){ window.scrollTo({ top:0, behavior:"smooth" }); });
   window.addEventListener("scroll", syncTop, { passive:true });
   $("toTop").addEventListener("click", function(){ window.scrollTo({ top:0, behavior:"smooth" }); });
   function renderList(){
