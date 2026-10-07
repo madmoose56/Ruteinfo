@@ -228,7 +228,7 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-km="3" aria-pressed="true">3 km</button>
         </div>
       </div>
-      <div class="lbl">Vis (flere kan velges)
+      <div class="lbl">
         <div class="seg" id="showSeg" role="group" aria-label="Vis">
           <button type="button" data-k="hotel" aria-pressed="true">Hoteller</button>
           <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
@@ -678,7 +678,7 @@ body.mapOpen{overflow:hidden}
   var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser (Vegvesen)"], svvmin:["vegminne","vegminner","Vegminner (Vegvesen)"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
   var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,rest:null,svvrest:null,svvmin:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,rest:false,svvrest:false,svvmin:false,act:false},
-    me:null, view:null, started:false, token:0, qKm:3, corridor:3, sort:"route", routeKind:"" };
+    me:null, view:null, started:false, token:0, qKm:2, corridor:2, sort:"route", routeKind:"" };
 
   // Places matching the typed letters: names starting with them first, cities and big places first
   function matchPlaces(txt, max){
@@ -1326,7 +1326,7 @@ body.mapOpen{overflow:hidden}
   // Fra: a place from the list, "Der jeg er" (GPS start of a route) or "Nær meg" (search around my position)
   var fromMode = "place", fromGps = false, fromText = "Oslo";
   var CORR = { route:[[0.3,"Ved vei"],[1,"1 km"],[2,"2 km"],[3,"3 km"]], near:[[2,"2 km"],[5,"5 km"],[10,"10 km"],[20,"20 km"]] };
-  var corrPick = { route:3, near:5 };
+  var corrPick = { route:2, near:5 };
   function corrMode(){ return fromMode === "near" ? "near" : "route"; }
   function drawCorr(){
     var m = corrMode(), box = $("corr"); box.textContent = "";
@@ -1354,6 +1354,7 @@ body.mapOpen{overflow:hidden}
     f.value = gps ? "Min posisjon" : fromText;
     fromMode = m; fromGps = gps; f.disabled = gps; $("swap").disabled = gps;
     if(m !== "near") routeFrom = m;
+    setTimeout(savePrefs, 0);
     Array.prototype.forEach.call($("fromMode").children, function(b){ b.setAttribute("aria-pressed", b.dataset.m === routeFrom ? "true" : "false"); });
     Array.prototype.forEach.call($("modeRow").children, function(b){ b.setAttribute("aria-pressed", (b.dataset.mode === "near") === (m === "near") ? "true" : "false"); });
     drawCorr();
@@ -1424,16 +1425,6 @@ body.mapOpen{overflow:hidden}
     if(e && e.code === 3) return "Fikk ikke posisjonen i tide. Gå gjerne ut eller koble til Wi-Fi, og prøv igjen.";
     return "Fikk ikke tak i posisjonen din. Prøv igjen om litt.";
   }
-  // Multi-select toggles; at least one must stay on
-  // One row of choices: Hoteller, Bensin, Elbil-lading and the four activity types. At least one must stay on.
-  function togglePick(sel, cats, btn){
-    var isCat = !!btn.dataset.c, key = btn.dataset.c || btn.dataset.k, store = isCat ? cats : sel, on = !store[key];
-    var active = PLAIN.filter(function(k){ return sel[k]; }).length + CATS.filter(function(c){ return cats[c]; }).length;
-    if(!on && active === 1) return null;
-    store[key] = on; btn.setAttribute("aria-pressed", on?"true":"false");
-    sel.act = CATS.some(function(c){ return cats[c]; });
-    return { key:key, isCat:isCat, on:on };
-  }
   Object.keys(CHAINS).forEach(function(k){
     $("chainBox_"+k).querySelector(".chainChips").addEventListener("click", function(e){
       var b = e.target.closest("button"); if(!b) return;
@@ -1443,18 +1434,33 @@ body.mapOpen{overflow:hidden}
   // A list filter shows once a search has found chains for that kind
   function syncChainBox(){ Object.keys(CHAINS).forEach(function(k){ $("chainBox_"+k).hidden = !state.sel[k] || !$("chainBox_"+k).querySelector(".chainChips").hasChildNodes(); }); }
   syncChainBox();
+  // One choice at a time: "hotel", "fuel" … or "c:family" for an activity type
+  function curPick(){
+    var k = PLAIN.filter(function(x){ return state.sel[x]; })[0];
+    return k || "c:"+(CATS.filter(function(c){ return state.cats[c]; })[0] || "family");
+  }
+  function applyPick(pick){
+    var isCat = pick.indexOf("c:") === 0, key = isCat ? pick.slice(2) : pick;
+    PLAIN.forEach(function(k){ state.sel[k] = !isCat && k === key; });
+    CATS.forEach(function(c){ state.cats[c] = isCat && c === key; });
+    state.sel.act = isCat; state.view = pick;
+    Array.prototype.forEach.call($("showSeg").children, function(b){
+      b.setAttribute("aria-pressed", (b.dataset.c ? "c:"+b.dataset.c : b.dataset.k) === pick ? "true" : "false");
+    });
+    syncChainBox();
+  }
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    var r = togglePick(state.sel, state.cats, btn); if(!r) return;
-    syncChainBox();
-    if(r.on) state.view = r.isCat ? "c:"+r.key : r.key;
+    var pick = btn.dataset.c ? "c:"+btn.dataset.c : btn.dataset.k;
+    if(pick === curPick()) return;
+    applyPick(pick); savePrefs();
     if(!state.started){ search(); return; }
-    if(r.isCat && r.on){   // a new activity type needs a new query
+    if(pick.indexOf("c:") === 0){   // another activity type needs a new query
       state.items.act = null; state.err.act = false; state.loading.act = false;
       renderList(); loadKind("act").then(renderList); return;
     }
     renderList();
-    if(!r.isCat && state.sel[r.key] && !state.items[r.key] && !state.loading[r.key]) loadKind(r.key).then(renderList);
+    if(!state.items[pick] && !state.loading[pick]) loadKind(pick).then(renderList);
   });
 
   var busy = false;
@@ -1765,7 +1771,7 @@ body.mapOpen{overflow:hidden}
   $("corr").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     var km = parseFloat(btn.dataset.km), wider = km > (state.qKm||0);
-    state.corridor = corrPick[corrMode()] = km;
+    state.corridor = corrPick[corrMode()] = km; savePrefs();
     Array.prototype.forEach.call($("corr").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
     if(!state.started || wider) search();   // wider corridor needs a new query
     else renderList();
@@ -1778,6 +1784,10 @@ body.mapOpen{overflow:hidden}
   });
 
   // Initial header and empty chart for the default pair
+  // The app remembers Velg rute / Nær meg, the choice and the distances (first time: Velg rute, Hoteller, 2 km)
+  function savePrefs(){
+    try{ localStorage.setItem("ruteinfo.prefs", JSON.stringify({ mode:fromMode === "near" ? "near" : "route", pick:curPick(), corr:corrPick })); }catch(_){}
+  }
   // Fra and Til remember the last search (places picked from Kartverket keep their position)
   function saveLast(a, b){
     try{
@@ -1793,6 +1803,15 @@ body.mapOpen{overflow:hidden}
     if(d.from){ $("from").value = d.from; fromText = d.from; }
     if(d.to) $("to").value = d.to;
     if(d.fromMode === "gps") setFromMode("gps");
+  })();
+  (function(){
+    var d = null;
+    try{ d = JSON.parse(localStorage.getItem("ruteinfo.prefs") || "null"); }catch(_){}
+    d = d || {};
+    if(d.corr){ ["route","near"].forEach(function(m){ if(CORR[m].some(function(c){ return c[0] === d.corr[m]; })) corrPick[m] = d.corr[m]; }); }
+    var ok = d.pick && (PLAIN.indexOf(d.pick) >= 0 || CATS.indexOf(String(d.pick).slice(2)) >= 0);
+    applyPick(ok ? d.pick : "hotel");
+    if(d.mode === "near") setFromMode("near"); else drawCorr();
   })();
   var p0 = cityPair();
   if(!p0.error && p0.a && p0.b){
