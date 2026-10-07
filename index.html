@@ -39,7 +39,7 @@ form{display:grid;gap:14px}
 .cities .fromBox{grid-column:1/-1}
 .nearMode #toBox,.nearMode #swap{display:none}
 label,.lbl{display:flex;flex-direction:column;gap:4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2);min-width:0}
-input[type=text],input:not([type]){font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0;width:100%;text-transform:none;letter-spacing:0}
+input[type=text],input[type=search],input:not([type]){font:inherit;font-size:16px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0;width:100%;text-transform:none;letter-spacing:0}
 input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .swap{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;height:44px;width:44px;font-size:18px;cursor:pointer}
 .seg{display:flex;gap:6px;flex-wrap:wrap}
@@ -130,6 +130,13 @@ button.idx{border:0;padding:0;cursor:pointer}
 .cities label,.cities .lbl{min-width:0}
 .fromMode{flex-wrap:nowrap;gap:4px}
 .ac{position:relative}
+#chainBox{margin-top:12px}
+#chainBox[hidden]{display:none}
+#chain{-webkit-appearance:none;appearance:none}
+.chainChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0}
+.chainChips:empty{display:none}
+.chainChips button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:6px 10px;min-height:36px;cursor:pointer}
+.chainChips button[aria-pressed="true"]{background:#D4EFDF;border-color:var(--accent);font-weight:600}
 .sugg{position:absolute;left:0;top:calc(100% + 4px);min-width:100%;width:max-content;max-width:calc(100vw - 48px);z-index:2500;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);max-height:300px;overflow-y:auto;overflow-x:hidden;text-transform:none;letter-spacing:0}
 .sugg[hidden]{display:none}
 .sugg button{display:flex;justify-content:space-between;align-items:baseline;gap:12px;width:100%;text-align:left;padding:11px 12px;border:0;border-bottom:1px solid var(--line);background:none;font:inherit;font-size:16px;color:var(--ink);cursor:pointer}
@@ -229,6 +236,10 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
           <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
         </div>
+      </div>
+      <div class="lbl" id="chainBox">Hotellkjede eller navn (valgfritt)
+        <input id="chain" type="search" placeholder="f.eks. Best Western" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Hotellkjede eller navn">
+        <div class="chainChips" id="chainChips" aria-label="Kjeder langs ruta"></div>
       </div>
       <button class="go" id="go" type="submit">Søk langs ruta</button>
       <div class="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
@@ -917,7 +928,7 @@ body.mapOpen{overflow:hidden}
     return { id:e.type+e.id, kind:kind, cat:ai?ai.cat:"", name:name,
       type: kind==="rest" ? (t.highway==="services" ? "Serviceområde" : "Rasteplass") : kind==="fuel" ? "Bensinstasjon" : kind==="ev" ? "Ladestasjon" : kind==="act" ? ai.type : (TYPE_NB[tm]||""),
       stars:(kind!=="hotel"||isNaN(st)||st<1||st>5)?0:st, open24:t.opening_hours==="24/7", info:info, city:city, addr:addr,
-      lat:la, lon:lo, web:web, phone:t.phone||t["contact:phone"]||"" };
+      lat:la, lon:lo, web:web, phone:t.phone||t["contact:phone"]||"", brand:[t.brand, t.operator].filter(Boolean).join(" ") };
   }
   function metaParts(h){
     var p = [];
@@ -952,7 +963,25 @@ body.mapOpen{overflow:hidden}
     }
     return true;
   }
-  function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]); }) : []; }
+  function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]) && (kind !== "hotel" || chainOk(h)); }) : []; }
+  // Hotel chain / name filter: matches the name and the brand or operator from OpenStreetMap
+  var chainQ = "";
+  var CHAINS = ["Scandic","Thon","Clarion","Quality","Comfort","Radisson","Best Western","Smarthotel","Citybox","Hilton","Moxy","Saga",
+    "Zleep","Classic Norway","De Historiske","Fjordhotels","Park Inn","Strawberry","Choice","Eckerö","Rica","First Hotel","Kongsvold","Sure Hotel"];
+  function chainText(h){ return (h.name+" "+(h.brand||"")).toLowerCase().replace(/[-–]/g," "); }
+  function chainOk(h){ return !chainQ || chainText(h).indexOf(chainQ) >= 0; }
+  function updateChains(){
+    var box = $("chainChips"), html = "", all = state.sel.hotel && state.items.hotel ? state.items.hotel.filter(inCorridor) : [];
+    var found = CHAINS.map(function(c){ var q = c.toLowerCase(); return [c, all.filter(function(h){ return chainText(h).indexOf(q) >= 0; }).length]; })
+      .filter(function(x){ return x[1] > 0; }).sort(function(a,b){ return b[1]-a[1]; });
+    if(found.length || chainQ) html += '<button type="button" data-c="" aria-pressed="'+(chainQ?"false":"true")+'">Alle</button>';
+    found.forEach(function(x){ html += '<button type="button" data-c="'+x[0]+'" aria-pressed="'+(chainQ===x[0].toLowerCase()?"true":"false")+'">'+x[0]+' ('+x[1]+')</button>'; });
+    box.innerHTML = state.started ? html : "";
+  }
+  function setChain(v){
+    chainQ = String(v||"").trim().toLowerCase().replace(/[-–]/g," ");
+    if(state.started) renderList();
+  }
   function byAlong(p,q){ return state.near ? p.off-q.off : p.along-q.along; }   // Nær meg: nearest first
   var LETTER = { hotel:"H", fuel:"B", ev:"E", rest:"R", svvrest:"RV", svvmin:"V", family:"F", sport:"S", culture:"K", food:"M" };
   // "H1", "B2", "K3" … numbered along the route, activities counted per type
@@ -1247,11 +1276,13 @@ body.mapOpen{overflow:hidden}
         $("count").textContent = shown.length + (shown.length===1?" hotell":" hoteller");
         if(!shown.length){
           empty.hidden = false;
-          empty.textContent = "Ingen overnattingssteder innenfor "+corrLabel()+(state.near ? " fra deg" : " fra ruta")+". Prøv en bredere avstand.";
+          empty.textContent = chainQ ? "Ingen hoteller som passer «"+$("chain").value.trim()+"» innenfor "+corrLabel()+(state.near ? " fra deg" : " fra ruta")+". Prøv en bredere avstand eller et annet navn."
+            : "Ingen overnattingssteder innenfor "+corrLabel()+(state.near ? " fra deg" : " fra ruta")+". Prøv en bredere avstand.";
         } else empty.hidden = true;
       }
       arr.forEach(function(h){ list.appendChild(buildItem(h, idx[h.id], routeCtx)); });
     }
+    updateChains();
     renderExtra("fuel"); renderExtra("ev"); renderExtra("rest"); renderExtra("svvrest"); renderExtra("svvmin"); renderExtra("act");
     updateHits();
     drawChart();
@@ -1362,9 +1393,19 @@ body.mapOpen{overflow:hidden}
     sel.act = CATS.some(function(c){ return cats[c]; });
     return { key:key, isCat:isCat, on:on };
   }
+  var chainT = 0;
+  $("chain").addEventListener("input", function(){ var v = this.value; clearTimeout(chainT); chainT = setTimeout(function(){ setChain(v); }, 250); });
+  $("chain").addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); this.blur(); setChain(this.value); } });
+  $("chainChips").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    $("chain").value = b.dataset.c; setChain(b.dataset.c);
+  });
+  function syncChainBox(){ $("chainBox").hidden = !state.sel.hotel; }
+  syncChainBox();
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     var r = togglePick(state.sel, state.cats, btn); if(!r) return;
+    syncChainBox();
     if(r.on) state.view = r.isCat ? "c:"+r.key : r.key;
     if(!state.started) return;
     if(r.isCat && r.on){   // a new activity type needs a new query
