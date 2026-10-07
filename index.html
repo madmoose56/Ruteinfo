@@ -844,7 +844,8 @@ body.mapOpen{overflow:hidden}
     if(start < L.length-1 || !boxes.length) addBox(start, L.length-1);
     if(state.to && !state.near){ pad = startRadiusKm(state.to) + 0.5; addBox(L.length-1, L.length-1); }   // the whole destination
     var out = [], per = 8, sels = [];
-    (Array.isArray(kind)?kind:[kind]).forEach(function(k){ sels = sels.concat(selectorsFor(k, state.cats)); });
+    var allCats = { family:true, sport:true, culture:true, food:true };   // Aktivitet always fetches all four types
+    (Array.isArray(kind)?kind:[kind]).forEach(function(k){ sels = sels.concat(selectorsFor(k, allCats)); });
     for(i=0;i<boxes.length;i+=per){
       var part = boxes.slice(i, i+per), body = "";
       part.forEach(function(b){ sels.forEach(function(x){ body += x+"("+b+");"; }); });
@@ -1595,8 +1596,15 @@ body.mapOpen{overflow:hidden}
     if(!force && k === fieldsKey) return;
     fieldsKey = k; search();
   }
+  // The chosen category is fetched first; the others follow quietly in the background, so switching is quick
+  function prefetchOthers(tok){
+    var rest = KINDS.filter(function(k){ return !state.items[k] && !state.loading[k]; });
+    if(!rest.length) return;
+    loadMany(rest).then(function(){ if(tok === state.token) renderList(); });
+  }
   function search(){
     if(busy) cancelSearch();
+    else { opSerial++; var bg = aborters; aborters = []; bg.forEach(function(f){ f(); }); }   // stop background fetching from the last search
     fieldsKey = $("from").value.trim().toLowerCase()+"|"+$("to").value.trim().toLowerCase();
     var st = $("status"); st.className = "msg"; st.textContent = "";
     fitPending = true;
@@ -1636,6 +1644,7 @@ body.mapOpen{overflow:hidden}
         fitPending = true; renderList();
         if(ks.every(function(k){ return state.err[k]; })) throw new Error("all failed");
         st.textContent = "";
+        prefetchOthers(tok);
       });
     }).catch(function(e){
       if(tok !== state.token) return;
