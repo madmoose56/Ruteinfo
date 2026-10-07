@@ -91,7 +91,9 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 #map{height:100%;background:var(--band);z-index:0}
 .legend,.pair{position:absolute;z-index:800;background:rgba(255,255,255,.94);color:#16201B;border-radius:12px;box-shadow:0 1px 6px rgba(0,0,0,.25);font-size:14px}
 .legend{top:10px;left:50%;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;align-items:center;padding:8px 14px;max-width:calc(100% - 20px);width:max-content}
-.legend span{white-space:nowrap}
+.legend span{display:flex;align-items:center;white-space:normal;overflow-wrap:break-word;min-width:0;max-width:100%;line-height:1.25}
+.legend span[hidden]{display:none}
+.legend span i{flex:none}
 .formtitle{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
 .modeRow{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}
 .modeRow button{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.02em;padding:8px 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;min-height:44px}
