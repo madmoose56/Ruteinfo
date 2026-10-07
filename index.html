@@ -93,6 +93,10 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .legend{top:10px;left:50%;transform:translateX(-50%);display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;align-items:center;padding:8px 14px;max-width:calc(100% - 20px);width:max-content}
 .legend span{white-space:nowrap}
 .formtitle{font-family:var(--font-display);font-weight:700;font-size:22px;margin:0;letter-spacing:.02em}
+.modeRow{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}
+.modeRow button{font-family:var(--font-display);font-weight:700;font-size:20px;letter-spacing:.02em;padding:8px 16px;border-radius:10px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;min-height:44px}
+.modeRow button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.nearMode .cities{display:none}
 .legend i{display:inline-block;vertical-align:middle;margin-right:6px}
 .legend .ln{width:22px;height:4px;background:#0B6B47;border-radius:2px}
 .legend .dt{width:12px;height:12px;background:#0B6B47;border-radius:50%}
@@ -199,13 +203,15 @@ body.mapOpen{overflow:hidden}
 
   <section class="card">
     <form id="form" autocomplete="off">
-      <h2 class="formtitle">Velg rute</h2>
+      <div class="modeRow" id="modeRow" role="group" aria-label="Søk">
+        <button type="button" data-mode="route" aria-pressed="true">Velg rute</button>
+        <button type="button" data-mode="near" aria-pressed="false">Nær meg</button>
+      </div>
       <div class="cities">
         <div class="lbl fromBox">Fra
           <div class="seg fromMode" id="fromMode" role="group" aria-label="Start fra">
             <button type="button" data-m="place" aria-pressed="true">Sted</button>
             <button type="button" data-m="gps" aria-pressed="false">Der jeg er</button>
-            <button type="button" data-m="near" aria-pressed="false">Nær meg</button>
           </div>
           <div class="ac"><input id="from" type="text" value="Oslo" aria-label="Fra" autocomplete="off" autocorrect="off" spellcheck="false" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="fromSugg"><div class="sugg" id="fromSugg" role="listbox" hidden></div></div>
         </div>
@@ -658,7 +664,7 @@ body.mapOpen{overflow:hidden}
     "fredrikstad":8, "sarpsborg":7, "skien":7, "porsgrunn":7, "bodø":7, "ålesund":7, "tønsberg":7, "sandefjord":7, "asker":8, "bærum":9,
     "sandvika":7, "lillestrøm":7, "ski":6, "hamar":6, "larvik":6, "haugesund":6, "moss":6, "lørenskog":6 };
   function startRadiusKm(place){
-    if(place[3]==="pos") return 1.5;
+    if(place[3]==="pos") return 3;   // starting from my GPS position: skip the nearest 3 km
     var r = START_RADIUS[place[0].toLowerCase()];
     return r || (place[3]==="by" ? 6 : place[3]==="tettsted" ? 4 : 2);   // smaller places from Kartverket: 2 km
   }
@@ -833,6 +839,7 @@ body.mapOpen{overflow:hidden}
       if(route.cum[i] - route.cum[start] >= 15){ addBox(start, i); start = i; }
     }
     if(start < L.length-1 || !boxes.length) addBox(start, L.length-1);
+    if(state.to && !state.near){ pad = startRadiusKm(state.to) + 0.5; addBox(L.length-1, L.length-1); }   // the whole destination
     var out = [], per = 8, sels = [];
     (Array.isArray(kind)?kind:[kind]).forEach(function(k){ sels = sels.concat(selectorsFor(k, state.cats)); });
     for(i=0;i<boxes.length;i+=per){
@@ -958,14 +965,21 @@ body.mapOpen{overflow:hidden}
 
   // Never show anything in the start city/town; keep within the corridor
   function inCorridor(h){
-    if(h.off > state.corridor + 0.01) return false;
-    if(state.near) return true;
-    if(state.from){
+    if(state.near) return h.off <= state.corridor + 0.01;
+    var P = state.route.proj(h.lat, h.lon);
+    if(state.from){   // never anything in the start place
       if(state.from[3] !== "pos" && h.city && h.city.toLowerCase() === state.from[0].toLowerCase()) return false;
-      var S = state.route.proj(state.from[1], state.from[2]), P = state.route.proj(h.lat, h.lon);
+      var S = state.route.proj(state.from[1], state.from[2]);
       if(Math.hypot(P[0]-S[0], P[1]-S[1]) < startRadiusKm(state.from)) return false;
     }
-    return true;
+    if(inDest(h, P)) return true;   // the whole destination, whatever the chosen distance
+    return h.off <= state.corridor + 0.01;
+  }
+  function inDest(h, P){
+    var t = state.to; if(!t || state.near) return false;
+    if(h.city && h.city.toLowerCase() === t[0].toLowerCase()) return true;
+    var T = state.route.proj(t[1], t[2]);
+    return Math.hypot(P[0]-T[0], P[1]-T[1]) < startRadiusKm(t);
   }
   function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]) && chainOk(h); }) : []; }
   // Chain / name filter for hotels, fuel and charging: matches the name and the brand, operator or network from OpenStreetMap
@@ -1334,15 +1348,23 @@ body.mapOpen{overflow:hidden}
     if(a===b) return { error: "Velg to forskjellige byer." };
     return { a:a, b:b };
   }
+  var routeFrom = "place";   // Sted or Der jeg er, kept while "Nær meg" is on
   function setFromMode(m){
     if(m === fromMode) return;
     var f = $("from"), gps = m !== "place";
     if(gps && !fromGps) fromText = f.value;
     f.value = gps ? "Min posisjon" : fromText;
     fromMode = m; fromGps = gps; f.disabled = gps; $("swap").disabled = gps;
-    Array.prototype.forEach.call($("fromMode").children, function(b){ b.setAttribute("aria-pressed", b.dataset.m === m ? "true" : "false"); });
+    if(m !== "near") routeFrom = m;
+    Array.prototype.forEach.call($("fromMode").children, function(b){ b.setAttribute("aria-pressed", b.dataset.m === routeFrom ? "true" : "false"); });
+    Array.prototype.forEach.call($("modeRow").children, function(b){ b.setAttribute("aria-pressed", (b.dataset.mode === "near") === (m === "near") ? "true" : "false"); });
     drawCorr();
   }
+  $("modeRow").addEventListener("click", function(e){
+    var btn = e.target.closest("button"); if(!btn) return;
+    setFromMode(btn.dataset.mode === "near" ? "near" : routeFrom);
+    if(state.started) search();
+  });
   $("fromMode").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     setFromMode(btn.dataset.m);
@@ -1464,6 +1486,7 @@ body.mapOpen{overflow:hidden}
     }
     for(i=1;i<L.length;i++){ if(route.cum[i] - route.cum[start] >= 40){ add(start, i); start = i; } }
     if(start < L.length-1 || !out.length) add(start, L.length-1);
+    if(state.to && !state.near){ pad = startRadiusKm(state.to) + 1; add(L.length-1, L.length-1); }   // the whole destination
     return out;
   }
   // WKT from NVDB with srid 4326 is "lat lon [z]"
@@ -1572,6 +1595,7 @@ body.mapOpen{overflow:hidden}
       : getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); });
     getRoute.then(function(route){
       if(tok !== state.token) return;
+      if(!near) saveLast(p.a, p.b);
       state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); resetChartView(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
       var ks = KINDS.filter(function(k){ return state.sel[k]; });
       st.textContent = "Henter "+ks.map(function(k){ return NAMES[k][1]; }).join(", ")+(near ? " nær deg…" : " langs ruta…");
@@ -1743,8 +1767,24 @@ body.mapOpen{overflow:hidden}
   });
 
   // Initial header and empty chart for the default pair
+  // Fra and Til remember the last search (places picked from Kartverket keep their position)
+  function saveLast(a, b){
+    try{
+      localStorage.setItem("ruteinfo.last", JSON.stringify({ fromMode:routeFrom, from:fromGps ? fromText : $("from").value,
+        fromPlace:a && a[3] !== "pos" ? a : null, to:$("to").value, toPlace:b || null }));
+    }catch(_){}
+  }
+  (function(){
+    var d = null;
+    try{ d = JSON.parse(localStorage.getItem("ruteinfo.last") || "null"); }catch(_){}
+    if(!d) return;
+    [d.fromPlace, d.toPlace].forEach(function(c){ if(c && c[0] && !BY[c[0].toLowerCase()]) REMOTE[c[0].toLowerCase()] = c; });
+    if(d.from){ $("from").value = d.from; fromText = d.from; }
+    if(d.to) $("to").value = d.to;
+    if(d.fromMode === "gps") setFromMode("gps");
+  })();
   var p0 = cityPair();
-  if(!p0.error){
+  if(!p0.error && p0.a && p0.b){
     state.from = p0.a; state.to = p0.b; state.route = getStraightRoute(p0.a, p0.b);
     showRouteHeader();
     $("routeLen").textContent = ""; drawChart(); initMap(); updateMap();
