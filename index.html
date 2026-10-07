@@ -265,7 +265,7 @@ body.mapOpen{overflow:hidden}
   <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
-      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Hotell</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms">V</i>Severdighet</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport og friluft</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
+      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Hotell</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass</span><span id="lgSvvmin" hidden><i class="vms">V</i>Severdighet</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
       </div>
       <div id="mapWrap">
@@ -316,12 +316,12 @@ body.mapOpen{overflow:hidden}
       <p class="empty" id="restEmpty" hidden></p>
     </div>
     <div id="svvrestPart" hidden>
-      <div class="list-head fuelhead"><h2 id="svvrestCount">Rasteplasser (Vegvesen)</h2></div>
+      <div class="list-head fuelhead"><h2 id="svvrestCount">Rasteplasser</h2></div>
       <ol id="svvrestList"></ol>
       <p class="empty" id="svvrestEmpty" hidden></p>
     </div>
     <div id="svvminPart" hidden>
-      <div class="list-head fuelhead"><h2 id="svvminCount">Severdigheter (Vegvesen)</h2></div>
+      <div class="list-head fuelhead"><h2 id="svvminCount">Severdigheter</h2></div>
       <ol id="svvminList"></ol>
       <p class="empty" id="svvminEmpty" hidden></p>
     </div>
@@ -683,7 +683,7 @@ body.mapOpen{overflow:hidden}
   // Kinds fetched from Statens vegvesen (NVDB object types), not OpenStreetMap.
   // Severdigheter = road heritage (786) + the brown attraction signs (96 Skiltplate with sign 640.10 "Severdighet")
   var SVV = { svvrest:[{ t:39 }], svvmin:[{ t:786 }, { t:96, q:'&egenskap=%225530=9184%22' }] };
-  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser (Vegvesen)"], svvmin:["severdighet","severdigheter","Severdigheter (Vegvesen)"], act:["aktivitet","aktiviteter","Aktiviteter"] };
+  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser"], svvmin:["severdighet","severdigheter","Severdigheter"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
   var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,rest:null,svvrest:null,svvmin:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,rest:false,svvrest:false,svvmin:false,act:false},
     me:null, view:null, started:false, token:0, qKm:2, corridor:2, sort:"route", routeKind:"" };
@@ -1265,7 +1265,7 @@ body.mapOpen{overflow:hidden}
   }
 
   var CHIP_LBL = { svvrest:"Rasteplass SVV", svvmin:"Severdigheter SVV" };
-  var CAT_LBL = { family:"Familie", sport:"Sport og friluft", culture:"Kultur", food:"Mat og drikke" };
+  var CAT_LBL = { family:"Familie", sport:"Sport", culture:"Kultur", food:"Mat og drikke" };
   // The result chips double as the list chooser when several kinds are selected
   function chipKeys(){
     var k = [];
