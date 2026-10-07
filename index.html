@@ -69,9 +69,6 @@ input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(-
 .chartSlider::-moz-range-thumb{width:72px;height:30px;border-radius:15px;background:#14423A;border:3px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4)}
 .chart svg{display:block;height:auto}
 .chart{touch-action:pan-x pan-y}
-.zoomBtns{display:flex;gap:6px;margin-left:auto}
-.zoomBtns button{font:700 20px system-ui,sans-serif;width:40px;height:36px;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;cursor:pointer;line-height:1}
-.zoomBtns button:disabled{opacity:.35;cursor:default}
 .note{font-size:12.5px;color:var(--ink-2);margin:8px 0 0}
 .list-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}
@@ -292,7 +289,6 @@ body.mapOpen{overflow:hidden}
     <div class="chart-head">
       <h2 id="routeTitle">Oslo – Moss</h2>
       <span class="mono" id="routeLen"></span>
-      <div class="zoomBtns"><button type="button" id="zoomOut" aria-label="Zoom ut">−</button><button type="button" id="zoomIn" aria-label="Zoom inn">+</button></div>
     </div>
     <div class="chart" id="chart"></div>
     <input type="range" class="chartSlider" id="chartSlider" min="0" max="1000" value="0" aria-label="Bla i ruteprofilen" hidden>
@@ -1106,7 +1102,7 @@ body.mapOpen{overflow:hidden}
   $("chartSlider").addEventListener("input", function(){
     var host = $("chart"); host.scrollLeft = (host.scrollWidth - host.clientWidth)*this.value/1000;
   });
-  function syncZoomBtns(){ $("zoomOut").disabled = chartZoom <= 1; $("zoomIn").disabled = chartZoom >= ZMAX; }
+  function syncZoomBtns(){}   // no zoom buttons any more: pinch with two fingers to zoom
   // New route: back to 20 % of the route, showing where you are (or the start)
   function resetChartView(){
     chartZoom = ZSTART; drawChart(); syncZoomBtns();
@@ -1838,8 +1834,6 @@ body.mapOpen{overflow:hidden}
   setupSuggest("to", "toSugg");
 
   $("cancel").addEventListener("click", cancelSearch);
-  $("zoomIn").addEventListener("click", function(){ setChartZoom(chartZoom*2); });
-  $("zoomOut").addEventListener("click", function(){ setChartZoom(chartZoom/2); });
   syncZoomBtns();
   var rsT = 0; window.addEventListener("resize", function(){ clearTimeout(rsT); rsT = setTimeout(drawChart, 150); });
   // Pinch with two fingers on the profile to zoom it
