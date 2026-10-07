@@ -245,7 +245,6 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-k="fuel" aria-pressed="false">Bensin</button>
           <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
           <button type="button" data-k="rest" aria-pressed="false">Rasteplass</button>
-          <button type="button" data-k="svvrest" aria-pressed="false">Rasteplass (Vegvesen)</button>
           <button type="button" data-k="svvmin" aria-pressed="false">Severdigheter</button>
           <button type="button" data-k="food" aria-pressed="false">Mat og drikke</button>
           <button type="button" data-k="act" aria-pressed="false">Aktivitet</button>
@@ -693,7 +692,7 @@ body.mapOpen{overflow:hidden}
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   if(isIOS && !isStandalone) $("install").hidden = false;
 
-  var KINDS = ["hotel","fuel","ev","rest","svvrest","svvmin","food","act"], PLAIN = ["hotel","fuel","ev","rest","svvrest","svvmin","food"];
+  var KINDS = ["hotel","fuel","ev","rest","svvmin","food","act"], PLAIN = ["hotel","fuel","ev","rest","svvmin","food"];   // Rasteplass (Vegvesen) is no longer offered
   // Kinds fetched from Statens vegvesen (NVDB object types), not OpenStreetMap.
   // Severdigheter = road heritage (786) + the brown attraction signs (96 Skiltplate with sign 640.10 "Severdighet")
   var SVV = { svvrest:[{ t:39 }], svvmin:[{ t:786 }, { t:96, q:'&egenskap=%225530=9184%22' }] };
