@@ -236,10 +236,7 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-k="rest" aria-pressed="false">Rasteplass</button>
           <button type="button" data-k="svvrest" aria-pressed="false">Rasteplass (Vegvesen)</button>
           <button type="button" data-k="svvmin" aria-pressed="false">Vegminner (Vegvesen)</button>
-          <button type="button" data-c="family" aria-pressed="false">Familie</button>
-          <button type="button" data-c="sport" aria-pressed="false">Friluft og sport</button>
-          <button type="button" data-c="culture" aria-pressed="false">Kultur</button>
-          <button type="button" data-c="food" aria-pressed="false">Mat og drikke</button>
+          <button type="button" data-k="act" aria-pressed="false">Aktivitet</button>
         </div>
       </div>
       <div class="lbl chainBox" id="chainBox_hotel" data-k="hotel" hidden>Listefilter – hotell
@@ -250,6 +247,9 @@ body.mapOpen{overflow:hidden}
       </div>
       <div class="lbl chainBox" id="chainBox_ev" data-k="ev" hidden>Listefilter – elbil-lading
         <div class="chainChips" aria-label="Listefilter elbil-lading"></div>
+      </div>
+      <div class="lbl chainBox" id="actBox" hidden>Listefilter – aktivitet
+        <div class="chainChips" id="actChips" aria-label="Listefilter aktivitet"></div>
       </div>
       <div class="statusRow" id="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
       <div class="lbl" id="hitsLbl" hidden>Velg treff<div class="hits" id="hits" aria-live="polite"></div></div>
@@ -980,7 +980,8 @@ body.mapOpen{overflow:hidden}
     var T = state.route.proj(t[1], t[2]);
     return Math.hypot(P[0]-T[0], P[1]-T[1]) < startRadiusKm(t);
   }
-  function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]) && chainOk(h); }) : []; }
+  function visible(kind){ return (state.sel[kind] && state.items[kind]) ? state.items[kind].filter(function(h){ return inCorridor(h) && (kind !== "act" || state.cats[h.cat]) && chainOk(h) && (kind !== "act" || !actSub || h.cat === actSub); }) : []; }
+  var actSub = "";   // Aktivitet: "" = all four types, or one of them
   // Chain / name filter for hotels, fuel and charging: matches the name and the brand, operator or network from OpenStreetMap
   var chainQ = { hotel:"", fuel:"", ev:"" };
   var CHAINS = {
@@ -1009,6 +1010,12 @@ body.mapOpen{overflow:hidden}
       found.forEach(function(x){ html += '<button type="button" data-c="'+x[0]+'" aria-pressed="'+(q===chainNorm(x[0])?"true":"false")+'">'+x[0]+' ('+x[1]+')</button>'; });
       box.innerHTML = state.started ? html : "";
     });
+    var acts = state.sel.act && state.items.act ? state.items.act.filter(inCorridor) : [], ah = "";
+    if(state.started && state.sel.act){
+      ah = '<button type="button" data-c="" aria-pressed="'+(actSub?"false":"true")+'">Alle ('+acts.length+')</button>';
+      CATS.forEach(function(c){ ah += '<button type="button" data-c="'+c+'" aria-pressed="'+(actSub===c?"true":"false")+'">'+CAT_LBL[c]+' ('+acts.filter(function(h){ return h.cat===c; }).length+')</button>'; });
+    }
+    $("actChips").innerHTML = ah;
     syncChainBox();
   }
   function setChain(k, v){
@@ -1169,7 +1176,7 @@ body.mapOpen{overflow:hidden}
     $("lgRoute").hidden = !!state.near;
     $("pairLbl").textContent = state.near ? "Nær meg · "+corrLabel() : state.from[0]+" → "+state.to[0];
     $("lgHotel").hidden = !state.sel.hotel; $("lgFuel").hidden = !state.sel.fuel; $("lgEv").hidden = !state.sel.ev; $("lgRest").hidden = !state.sel.rest; $("lgSvvrest").hidden = !state.sel.svvrest; $("lgSvvmin").hidden = !state.sel.svvmin;
-    CATS.forEach(function(c){ $("lg_"+c).hidden = !state.cats[c]; });
+    CATS.forEach(function(c){ $("lg_"+c).hidden = !state.sel.act || (actSub && actSub !== c); });
     mapLayer.clearLayers(); markerById = {};
     var ll = state.route.latlons.map(function(p){ return [p[0],p[1]]; });
     if(state.near){
@@ -1251,7 +1258,7 @@ body.mapOpen{overflow:hidden}
   function chipKeys(){
     var k = [];
     PLAIN.forEach(function(x){ if(state.sel[x]) k.push(x); });
-    CATS.forEach(function(c){ if(state.cats[c]) k.push("c:"+c); });
+    if(state.sel.act) k.push("act");
     return k;
   }
   function curView(){ var ks = chipKeys(); return ks.indexOf(state.view) >= 0 ? state.view : ks[0]; }
@@ -1265,8 +1272,9 @@ body.mapOpen{overflow:hidden}
     var box = $("hits"); if(!box) return;
     var ks = chipKeys(), cur = curView(), acts = state.sel.act ? visible("act") : [], html = "";
     ks.forEach(function(key){
-      var kind = key.charAt(0)==="c" ? "act" : key, label = kind==="act" ? CAT_LBL[key.slice(2)] : CHIP_LBL[kind] || NAMES[kind][2].replace("Ladestasjoner","Elbil-lading").replace("Bensinstasjoner","Bensin");
-      var n = kind==="act" ? acts.filter(function(h){ return h.cat===key.slice(2); }).length : visible(kind).length;
+      var isCat = key.indexOf("c:") === 0, kind = isCat ? "act" : key;
+      var label = isCat ? CAT_LBL[key.slice(2)] : kind === "act" ? (actSub ? CAT_LBL[actSub] : "Aktiviteter") : CHIP_LBL[kind] || NAMES[kind][2].replace("Ladestasjoner","Elbil-lading").replace("Bensinstasjoner","Bensin");
+      var n = isCat ? acts.filter(function(h){ return h.cat===key.slice(2); }).length : visible(kind).length;
       var body = (state.err[kind] && !state.items[kind]) ? label+": feil" : !state.items[kind] ? label+": …" : label+": <b>"+n+"</b>";
       html += '<button type="button" data-v="'+key+'" aria-pressed="'+(key===cur?"true":"false")+'"'+((state.err[kind] && !state.items[kind])?' class="bad"':"")+'>'+body+'</button>';
     });
@@ -1436,33 +1444,33 @@ body.mapOpen{overflow:hidden}
     });
   });
   // A list filter shows once a search has found chains for that kind
-  function syncChainBox(){ Object.keys(CHAINS).forEach(function(k){ $("chainBox_"+k).hidden = !state.sel[k] || !$("chainBox_"+k).querySelector(".chainChips").hasChildNodes(); }); }
+  function syncChainBox(){
+    Object.keys(CHAINS).forEach(function(k){ $("chainBox_"+k).hidden = !state.sel[k] || !$("chainBox_"+k).querySelector(".chainChips").hasChildNodes(); });
+    $("actBox").hidden = !state.sel.act || !$("actChips").hasChildNodes();
+  }
+  $("actChips").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    actSub = b.dataset.c; renderList();
+  });
   syncChainBox();
   // One choice at a time: "hotel", "fuel" … or "c:family" for an activity type
   function curPick(){
-    var k = PLAIN.filter(function(x){ return state.sel[x]; })[0];
-    return k || "c:"+(CATS.filter(function(c){ return state.cats[c]; })[0] || "family");
+    return PLAIN.filter(function(x){ return state.sel[x]; })[0] || (state.sel.act ? "act" : "hotel");
   }
   function applyPick(pick){
-    var isCat = pick.indexOf("c:") === 0, key = isCat ? pick.slice(2) : pick;
-    PLAIN.forEach(function(k){ state.sel[k] = !isCat && k === key; });
-    CATS.forEach(function(c){ state.cats[c] = isCat && c === key; });
-    state.sel.act = isCat; state.view = pick;
-    Array.prototype.forEach.call($("showSeg").children, function(b){
-      b.setAttribute("aria-pressed", (b.dataset.c ? "c:"+b.dataset.c : b.dataset.k) === pick ? "true" : "false");
-    });
+    var act = pick === "act";
+    PLAIN.forEach(function(k){ state.sel[k] = !act && k === pick; });
+    CATS.forEach(function(c){ state.cats[c] = act; });   // Aktivitet fetches all four types
+    state.sel.act = act; state.view = pick; actSub = "";
+    Array.prototype.forEach.call($("showSeg").children, function(b){ b.setAttribute("aria-pressed", b.dataset.k === pick ? "true" : "false"); });
     syncChainBox();
   }
   $("showSeg").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
-    var pick = btn.dataset.c ? "c:"+btn.dataset.c : btn.dataset.k;
+    var pick = btn.dataset.k;
     if(pick === curPick()) return;
     applyPick(pick); savePrefs();
     if(!state.started){ search(); return; }
-    if(pick.indexOf("c:") === 0){   // another activity type needs a new query
-      state.items.act = null; state.err.act = false; state.loading.act = false;
-      renderList(); loadKind("act").then(renderList); return;
-    }
     renderList();
     if(!state.items[pick] && !state.loading[pick]) loadKind(pick).then(renderList);
   });
@@ -1813,7 +1821,8 @@ body.mapOpen{overflow:hidden}
     try{ d = JSON.parse(localStorage.getItem("ruteinfo.prefs") || "null"); }catch(_){}
     d = d || {};
     if(d.corr){ ["route","near"].forEach(function(m){ if(CORR[m].some(function(c){ return c[0] === d.corr[m]; })) corrPick[m] = d.corr[m]; }); }
-    var ok = d.pick && (PLAIN.indexOf(d.pick) >= 0 || CATS.indexOf(String(d.pick).slice(2)) >= 0);
+    if(String(d.pick||"").indexOf("c:") === 0) d.pick = "act";   // older versions had one button per activity type
+    var ok = d.pick && (PLAIN.indexOf(d.pick) >= 0 || d.pick === "act");
     applyPick(ok ? d.pick : "hotel");
     if(d.mode === "near") setFromMode("near"); else drawCorr();
   })();
