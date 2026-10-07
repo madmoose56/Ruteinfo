@@ -251,8 +251,7 @@ body.mapOpen{overflow:hidden}
       <div class="lbl chainBox" id="chainBox_ev" data-k="ev" hidden>Listefilter – elbil-lading
         <div class="chainChips" aria-label="Listefilter elbil-lading"></div>
       </div>
-      <button class="go" id="go" type="submit">Søk langs ruta</button>
-      <div class="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
+      <div class="statusRow" id="statusRow"><p class="msg" id="status" role="status"></p><button type="button" class="cancel" id="cancel" hidden>Avbryt søk</button></div>
       <div class="lbl" id="hitsLbl" hidden>Velg treff<div class="hits" id="hits" aria-live="polite"></div></div>
     </form>
   </section>
@@ -1286,7 +1285,7 @@ body.mapOpen{overflow:hidden}
   // "Til toppen" shows once the search button has scrolled out of view.
   function syncTop(){
     var h1Bottom = $("hitsTop").previousElementSibling.getBoundingClientRect().bottom;
-    $("toTop").hidden = $("go").getBoundingClientRect().bottom > h1Bottom;
+    $("toTop").hidden = $("form").getBoundingClientRect().bottom > h1Bottom;
     $("hitsTop").hidden = !$("hits").hasChildNodes() || $("hits").getBoundingClientRect().bottom > h1Bottom + 8;
   }
   window.addEventListener("scroll", syncTop, { passive:true });
@@ -1337,7 +1336,6 @@ body.mapOpen{overflow:hidden}
       b.setAttribute("aria-pressed", c[0] === state.corridor ? "true" : "false"); box.appendChild(b);
     });
     $("corrLbl").textContent = m === "near" ? "Avstand fra meg" : "Avstand fra veien";
-    $("go").textContent = m === "near" ? "Søk nær meg" : "Søk langs ruta";
     $("form").classList.toggle("nearMode", m === "near");
   }
   function cityPair(){
@@ -1363,12 +1361,12 @@ body.mapOpen{overflow:hidden}
   $("modeRow").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     setFromMode(btn.dataset.mode === "near" ? "near" : routeFrom);
-    if(state.started) search();
+    search();
   });
   $("fromMode").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     setFromMode(btn.dataset.m);
-    if(state.started) search();
+    search();
   });
   // Resolves with ["Min posisjon", lat, lon, "pos"]
   function getStartPos(){
@@ -1450,7 +1448,7 @@ body.mapOpen{overflow:hidden}
     var r = togglePick(state.sel, state.cats, btn); if(!r) return;
     syncChainBox();
     if(r.on) state.view = r.isCat ? "c:"+r.key : r.key;
-    if(!state.started) return;
+    if(!state.started){ search(); return; }
     if(r.isCat && r.on){   // a new activity type needs a new query
       state.items.act = null; state.err.act = false; state.loading.act = false;
       renderList(); loadKind("act").then(renderList); return;
@@ -1460,7 +1458,7 @@ body.mapOpen{overflow:hidden}
   });
 
   var busy = false;
-  function setBusy(on){ busy = on; $("go").disabled = on; $("cancel").hidden = !on; }
+  function setBusy(on){ busy = on; $("cancel").hidden = !on; }
   function cancelSearch(){
     if(!busy) return;
     opSerial++; state.token++;
@@ -1565,7 +1563,16 @@ body.mapOpen{overflow:hidden}
       });
     });
   }
+  // No search button: every change of a choice searches right away
+  var fieldsKey = "";
+  function searchFromFields(force){
+    var k = $("from").value.trim().toLowerCase()+"|"+$("to").value.trim().toLowerCase();
+    if(!force && k === fieldsKey) return;
+    fieldsKey = k; search();
+  }
   function search(){
+    if(busy) cancelSearch();
+    fieldsKey = $("from").value.trim().toLowerCase()+"|"+$("to").value.trim().toLowerCase();
     var st = $("status"); st.className = "msg"; st.textContent = "";
     fitPending = true;
     var p = cityPair();
@@ -1694,7 +1701,7 @@ body.mapOpen{overflow:hidden}
       items = matchPlaces(q, 8);
       box.textContent = "";
       if(!(items.length === 1 && items[0][0].toLowerCase() === q.toLowerCase())){
-        items.forEach(function(c){ addRow(c[0], c[3], function(){ inp.value = c[0]; }); });
+        items.forEach(function(c){ addRow(c[0], c[3], function(){ inp.value = c[0]; searchFromFields(); }); });
       }
       show();
       // More places from Kartverket (needs network), after a short pause in the typing
@@ -1708,7 +1715,7 @@ body.mapOpen{overflow:hidden}
           if(!extra.length) return;
           var h = document.createElement("div"); h.className = "suggHead"; h.textContent = "Flere steder (Kartverket)"; box.appendChild(h);
           extra.forEach(function(r){
-            addRow(r.label, r.kind, function(){ REMOTE[r.label.toLowerCase()] = [r.label, r.lat, r.lon, r.kind, 0]; inp.value = r.label; });
+            addRow(r.label, r.kind, function(){ REMOTE[r.label.toLowerCase()] = [r.label, r.lat, r.lon, r.kind, 0]; inp.value = r.label; searchFromFields(); });
           });
           show();
         }).catch(function(){});
@@ -1719,8 +1726,13 @@ body.mapOpen{overflow:hidden}
     inp.addEventListener("blur", function(){ hideT = setTimeout(close, 200); });
     inp.addEventListener("keydown", function(e){
       if(e.key === "Escape") close();
-      else if(e.key === "Enter" && !box.hidden && items.length){ e.preventDefault(); inp.value = items[0][0]; close(); }
+      else if(e.key === "Enter"){
+        e.preventDefault();
+        if(!box.hidden && items.length) inp.value = items[0][0];
+        close(); inp.blur(); searchFromFields();
+      }
     });
+    inp.addEventListener("change", function(){ setTimeout(function(){ if(box.hidden) searchFromFields(); }, 250); });
   }
   setupSuggest("from", "fromSugg");
   setupSuggest("to", "toSugg");
@@ -1748,16 +1760,15 @@ body.mapOpen{overflow:hidden}
   drawCorr();
   $("swap").addEventListener("click", function(){
     var f = $("from"), t = $("to"), x = f.value; f.value = t.value; t.value = x;
-    if(state.started) search();
+    searchFromFields(true);
   });
   $("corr").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
     var km = parseFloat(btn.dataset.km), wider = km > (state.qKm||0);
     state.corridor = corrPick[corrMode()] = km;
     Array.prototype.forEach.call($("corr").children, function(b){ b.setAttribute("aria-pressed", b===btn?"true":"false"); });
-    if(state.started && wider) search();   // wider corridor needs a new query
-    else if(state.started) renderList();
-    else drawChart();
+    if(!state.started || wider) search();   // wider corridor needs a new query
+    else renderList();
   });
   $("sort").addEventListener("click", function(e){
     var btn = e.target.closest("button"); if(!btn) return;
@@ -1789,6 +1800,8 @@ body.mapOpen{overflow:hidden}
     showRouteHeader();
     $("routeLen").textContent = ""; drawChart(); initMap(); updateMap();
   } else initMap();
+  // No search button: search right away with the remembered Fra/Til
+  setTimeout(function(){ if(fromGps || (!p0.error && p0.a && p0.b)) search(); }, 300);
 
   if("serviceWorker" in navigator && location.protocol.indexOf("http")===0){
     window.addEventListener("load", function(){ navigator.serviceWorker.register("sw.js").catch(function(){}); });
