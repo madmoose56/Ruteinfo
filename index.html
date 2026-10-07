@@ -239,7 +239,7 @@ body.mapOpen{overflow:hidden}
           <button type="button" data-k="ev" aria-pressed="false">Elbil-lading</button>
           <button type="button" data-k="rest" aria-pressed="false">Rasteplass</button>
           <button type="button" data-k="svvrest" aria-pressed="false">Rasteplass (Vegvesen)</button>
-          <button type="button" data-k="svvmin" aria-pressed="false">Vegminner (Vegvesen)</button>
+          <button type="button" data-k="svvmin" aria-pressed="false">Severdigheter</button>
           <button type="button" data-k="act" aria-pressed="false">Aktivitet</button>
         </div>
       </div>
@@ -263,7 +263,7 @@ body.mapOpen{overflow:hidden}
   <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
-      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Hotell</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms">V</i>Vegminne (Vegvesen)</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport og friluft</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
+      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Hotell</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms">V</i>Severdighet (Vegvesen)</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport og friluft</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
       </div>
       <div id="mapWrap">
@@ -319,7 +319,7 @@ body.mapOpen{overflow:hidden}
       <p class="empty" id="svvrestEmpty" hidden></p>
     </div>
     <div id="svvminPart" hidden>
-      <div class="list-head fuelhead"><h2 id="svvminCount">Vegminner (Vegvesen)</h2></div>
+      <div class="list-head fuelhead"><h2 id="svvminCount">Severdigheter (Vegvesen)</h2></div>
       <ol id="svvminList"></ol>
       <p class="empty" id="svvminEmpty" hidden></p>
     </div>
@@ -678,8 +678,10 @@ body.mapOpen{overflow:hidden}
   if(isIOS && !isStandalone) $("install").hidden = false;
 
   var KINDS = ["hotel","fuel","ev","rest","svvrest","svvmin","act"], PLAIN = ["hotel","fuel","ev","rest","svvrest","svvmin"];
-  var SVV = { svvrest:39, svvmin:786 };   // kinds fetched from Statens vegvesen (NVDB object type ids), not OpenStreetMap
-  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser (Vegvesen)"], svvmin:["vegminne","vegminner","Vegminner (Vegvesen)"], act:["aktivitet","aktiviteter","Aktiviteter"] };
+  // Kinds fetched from Statens vegvesen (NVDB object types), not OpenStreetMap.
+  // Severdigheter = road heritage (786) + the brown attraction signs (96 Skiltplate with sign 640.10 "Severdighet")
+  var SVV = { svvrest:[{ t:39 }], svvmin:[{ t:786 }, { t:96, q:'&egenskap=%225530=9184%22' }] };
+  var NAMES = { hotel:["hotell","hoteller","Hoteller"], fuel:["bensinstasjon","bensinstasjoner","Bensinstasjoner"], ev:["ladestasjon","ladestasjoner","Ladestasjoner"], rest:["rasteplass","rasteplasser","Rasteplasser"], svvrest:["rasteplass","rasteplasser","Rasteplasser (Vegvesen)"], svvmin:["severdighet","severdigheter","Severdigheter (Vegvesen)"], act:["aktivitet","aktiviteter","Aktiviteter"] };
   var CATS = ["family","sport","culture","food"];
   var state = { from:null, to:null, route:null, items:{hotel:null,fuel:null,ev:null,rest:null,svvrest:null,svvmin:null,act:null}, err:{}, loading:{}, serial:{}, cats:{family:false,sport:false,culture:false,food:false}, sel:{hotel:true,fuel:false,ev:false,rest:false,svvrest:false,svvmin:false,act:false},
     me:null, view:null, started:false, token:0, qKm:2, corridor:2, sort:"route", routeKind:"" };
@@ -1260,7 +1262,7 @@ body.mapOpen{overflow:hidden}
     shown.forEach(function(h){ list.appendChild(buildItem(h, lab[h.id], routeCtx)); });
   }
 
-  var CHIP_LBL = { svvrest:"Rasteplass SVV", svvmin:"Vegminner SVV" };
+  var CHIP_LBL = { svvrest:"Rasteplass SVV", svvmin:"Severdigheter SVV" };
   var CAT_LBL = { family:"Familie", sport:"Sport og friluft", culture:"Kultur", food:"Mat og drikke" };
   // The result chips double as the list chooser when several kinds are selected
   function chipKeys(){
@@ -1518,14 +1520,17 @@ body.mapOpen{overflow:hidden}
     var nums = String(wkt||"").replace(/^[A-Z ]+/,"").match(/-?\d+(\.\d+)?(\s+-?\d+(\.\d+)?)+/g) || [];
     return nums.map(function(t){ var v = t.trim().split(/\s+/); return [parseFloat(v[0]), parseFloat(v[1])]; });
   }
-  function nvdbItem(o, kind, route){
+  // Road heritage that is hardly worth a stop (over half of all entries are old guard rails)
+  var DULL_MINNE = ["Rekkverk","Vegmerker/skilt","Stikkrenne","Kulvert","Garasje","Støttemur","Landkar/Pilar/Pontong","Kryss/Rundkjøring",
+    "Gang- og sykkelveg","Bomstasjon","Vegknute","Oppsynsmannsbrakke"];
+  function nvdbItem(o, kind, route, typeId){
     var e = {}; (o.egenskaper||[]).forEach(function(x){ if(x.verdi != null) e[x.navn] = x.verdi; });
     var pts = wktPoints(o.geometri && o.geometri.wkt);
     if(!pts.length) return null;
     // the point of the object closest to the route (long old roads can cross it)
     var step = Math.max(1, Math.floor(pts.length/40)), best = null;
     for(var i=0;i<pts.length;i+=step){ var pl = place(route, pts[i][0], pts[i][1]); if(!best || pl.off < best.pl.off) best = { p:pts[i], pl:pl }; }
-    var info = [], web = "", type = "";
+    var info = [], web = "", type = "", signKm = 99;
     if(kind === "svvrest"){
       type = e["Type"] || "Rasteplass";
       if(e["Drikkevann"] === "Ja") info.push("drikkevann");
@@ -1535,7 +1540,16 @@ body.mapOpen{overflow:hidden}
       if(ch) info.push(ch+" ladeplasser");
       var big = +e["Antall oppstillingspl. store kjt."]||0; if(big) info.push(big+" plasser for store kjøretøy");
       if(e["Vinterstengning"] === "Helt vinterstengt") info.push("vinterstengt"+(e["Helt vinterstengt, fra dato"] ? " "+e["Helt vinterstengt, fra dato"].split("-").reverse().join(".")+"–"+String(e["Helt vinterstengt, til dato"]||"").split("-").reverse().join(".") : ""));
+    } else if(typeId === 96){   // brown attraction sign: the text is the name, often with a distance ("Astruptunet 300 m")
+      type = "Severdighetsskilt";
+      var txt = String(e["Tekst"]||"").replace(/@[^@]*@/g," ").replace(/\$/g," ").replace(/\s+/g," ").trim();
+      var dm = txt.match(/(\d+[.,]?\d*)\s*(km|m)\s*$/i);
+      if(dm){ info.push("skiltet sier "+dm[1]+" "+dm[2].toLowerCase()); txt = txt.slice(0, dm.index).trim();
+        signKm = parseFloat(dm[1].replace(",","."))/(dm[2].toLowerCase() === "m" ? 1000 : 1); }
+      info.push("brunt skilt ved veien");
+      e["Navn"] = txt || "Severdighet";
     } else {
+      if(DULL_MINNE.indexOf(e["Enkeltminneart"]) >= 0) return null;
       type = e["Enkeltminneart"] || "Vegminne";
       if(e["Datering"]) info.push("fra "+e["Datering"]);
       if(e["Status"] === "Ute av bruk/nedlagt") info.push("ute av bruk");
@@ -1543,18 +1557,30 @@ body.mapOpen{overflow:hidden}
       if(/kulturminnesok\.no/.test(w)) web = "https://"+w.replace(/^https?:\/\//,"");
     }
     return { id:"svv"+o.id, kind:kind, cat:"", name:e["Navn"] || type, type:type, stars:0, open24:false, info:info, city:"", addr:"",
-      lat:best.p[0], lon:best.p[1], web:web, phone:"", along:best.pl.along, off:best.pl.off, signed:best.pl.signed };
+      lat:best.p[0], lon:best.p[1], web:web, phone:"", signKm:signKm, along:best.pl.along, off:best.pl.off, signed:best.pl.signed };
+  }
+  // Several signs often point to the same attraction: keep the one closest to it ("300 m" before "10 km")
+  function dedupeSigns(list){
+    var keep = [];
+    list.slice().sort(function(a,b){ return (a.signKm||99)-(b.signKm||99) || a.off-b.off; }).forEach(function(h){
+      if(h.type === "Severdighetsskilt" && h.name !== "Severdighet" && keep.some(function(k){
+        return k.type === h.type && k.name === h.name && Math.abs(k.along-h.along) < 20; })) return;
+      keep.push(h);
+    });
+    return keep;
   }
   function loadSvv(kind, route){
     var boxes = nvdbBoxes(route, state.qKm), seen = {}, out = [], ok = 0, i = 0;
-    function one(box){
-      var url = NVDB+SVV[kind]+"?kartutsnitt="+box+"&srid=4326&inkluder=egenskaper,geometri&antall=1000";
+    var jobs = [];
+    SVV[kind].forEach(function(src){ boxes.forEach(function(b){ jobs.push([src, b]); }); });
+    function one(job){
+      var src = job[0], url = NVDB+src.t+"?kartutsnitt="+job[1]+"&srid=4326&inkluder=egenskaper,geometri&antall=1000"+(src.q||"");
       return fetchTimeout(url, { headers:{ "Accept":"application/json", "X-Client":"Ruteinfo" } }, 30000)
         .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
-        .then(function(j){ ok++; (j.objekter||[]).forEach(function(o){ if(seen[o.id]) return; seen[o.id] = 1; var h = nvdbItem(o, kind, route); if(h) out.push(h); }); }, function(){});
+        .then(function(j){ ok++; (j.objekter||[]).forEach(function(o){ if(seen[o.id]) return; seen[o.id] = 1; var h = nvdbItem(o, kind, route, src.t); if(h) out.push(h); }); }, function(){});
     }
-    function next(){ if(i >= boxes.length) return Promise.resolve(); var b = boxes.slice(i, i+4); i += 4; return Promise.all(b.map(one)).then(next); }
-    return next().then(function(){ if(!ok) throw new Error("vegvesen"); return out; });
+    function next(){ if(i >= jobs.length) return Promise.resolve(); var b = jobs.slice(i, i+4); i += 4; return Promise.all(b.map(one)).then(next); }
+    return next().then(function(){ if(!ok) throw new Error("vegvesen"); return dedupeSigns(out); });
   }
   function loadMany(kinds){
     var tok = state.token, route = state.route;
