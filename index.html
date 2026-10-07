@@ -98,6 +98,10 @@ ol{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;
 .modeRow button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .nearMode .cities{display:none}
 .legend i{display:inline-block;vertical-align:middle;margin-right:6px}
+/* the letter used on the map markers, inside each legend icon */
+.legend i:not(.ln){display:inline-grid;place-items:center;width:20px!important;height:20px!important;color:#fff;font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace;font-style:normal;letter-spacing:-.06em}
+.legend i.dm{width:15px!important;height:15px!important;margin:0 8px 0 3px}
+.legend i.dm b{transform:rotate(-45deg);font-weight:700}
 .legend .ln{width:22px;height:4px;background:#0B6B47;border-radius:2px}
 .legend .dt{width:12px;height:12px;background:#0B6B47;border-radius:50%}
 .pair{left:50%;transform:translateX(-50%);bottom:26px;padding:8px 16px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis}
@@ -259,7 +263,7 @@ body.mapOpen{overflow:hidden}
   <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
-      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt"></i>Hotell</span><span id="lgFuel" hidden><i class="sq"></i>Bensin</span><span id="lgEv" hidden><i class="dm"></i>Lading</span><span id="lgRest" hidden><i class="rs"></i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs"></i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms"></i>Vegminne (Vegvesen)</span><span id="lg_family" hidden><i class="tg"></i>Familie</span><span id="lg_sport" hidden><i class="tg"></i>Friluft og sport</span><span id="lg_culture" hidden><i class="tg"></i>Kultur</span><span id="lg_food" hidden><i class="tg"></i>Mat og drikke</span></div>
+      <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Hotell</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass (Vegvesen)</span><span id="lgSvvmin" hidden><i class="vms">V</i>Vegminne (Vegvesen)</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport og friluft</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
       <div class="pair" id="pairLbl">Oslo → Moss</div>
       </div>
       <div id="mapWrap">
@@ -1106,7 +1110,7 @@ body.mapOpen{overflow:hidden}
         var cx = xs(h.along), cyy = ys(Math.max(-C,Math.min(C,h.signed))), mark;
         if(k === "hotel") mark = el("circle",{cx:cx,cy:cyy,r:13,fill:"var(--accent)",stroke:"var(--surface)","stroke-width":1.5});
         else if(k === "fuel") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:5,fill:"#C2410C",stroke:"var(--surface)","stroke-width":1.5});
-        else if(k === "act") mark = el("polygon",{points:[cx,cyy-17,cx+16,cyy+11,cx-16,cyy+11].join(","),fill:"#BE185D",stroke:"var(--surface)","stroke-width":1.5,"stroke-linejoin":"round"});
+        else if(k === "act") mark = el("polygon",{points:[cx,cyy-17,cx+16,cyy+11,cx-16,cyy+11].join(","),fill:CAT_COLOR[h.cat]||"#BE185D",stroke:"var(--surface)","stroke-width":1.5,"stroke-linejoin":"round"});
         else if(k === "rest") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:9,fill:"#0E7490",stroke:"var(--surface)","stroke-width":1.5});
         else if(k === "svvrest") mark = el("rect",{x:cx-14,y:cyy-11,width:28,height:22,rx:9,fill:"#1E3A8A",stroke:"var(--surface)","stroke-width":1.5});
         else if(k === "svvmin") mark = el("rect",{x:cx-13,y:cyy-11,width:26,height:22,rx:3,fill:"#78350F",stroke:"var(--surface)","stroke-width":1.5});
@@ -1147,8 +1151,10 @@ body.mapOpen{overflow:hidden}
     return "https://www.google.com/maps/dir/?api=1&origin="+state.from[1]+","+state.from[2]+"&destination="+state.to[1]+","+state.to[2]+
            "&waypoints="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate";
   }
-  function mkIcon(kind, n){
-    return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":kind==="rest"?"rm":kind==="svvrest"?"vr":kind==="svvmin"?"vm":kind==="act"?"tm":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span>"+n+"</span>",
+  var CAT_COLOR = { family:"#BE185D", sport:"#4D7C0F", culture:"#7E22CE", food:"#B91C1C" };
+  function mkIcon(kind, n, cat){
+    var st = kind==="act" && CAT_COLOR[cat] ? ' style="background:'+CAT_COLOR[cat]+'"' : "";
+    return L.divIcon({ className: kind==="fuel"?"fm":kind==="ev"?"em":kind==="rest"?"rm":kind==="svvrest"?"vr":kind==="svvmin"?"vm":kind==="act"?"tm":"hm", html: kind==="ev" ? "<span><b>"+n+"</b></span>" : "<span"+st+">"+n+"</span>",
       iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] });
   }
   function popupFor(h){
@@ -1193,7 +1199,7 @@ body.mapOpen{overflow:hidden}
     var pts = ll.slice(), lab = labels();
     KINDS.forEach(function(k){
       visible(k).sort(byAlong).forEach(function(h){
-        var m = L.marker([h.lat,h.lon], { icon:mkIcon(h.kind,lab[h.id]), title:h.name });
+        var m = L.marker([h.lat,h.lon], { icon:mkIcon(h.kind,lab[h.id],h.cat), title:h.name });
         m.bindPopup(popupFor(h)); m.addTo(mapLayer); markerById[h.id] = m; pts.push([h.lat,h.lon]);
       });
     });
@@ -1204,6 +1210,7 @@ body.mapOpen{overflow:hidden}
   function buildItem(h, n, ctx){
     var li = document.createElement("li"); li.className = "hotel";
     var b = document.createElement("button"); b.type = "button"; b.className = "idx"+(h.kind!=="hotel"?" "+h.kind:""); b.textContent = n;
+    if(h.kind === "act" && CAT_COLOR[h.cat]) b.style.background = CAT_COLOR[h.cat];
     b.setAttribute("aria-label","Vis "+h.name+" på kartet");
     b.addEventListener("click", function(){
       var mk = ctx.markers()[h.id], mp = ctx.map(); if(!mk || !mp) return;
@@ -1253,7 +1260,7 @@ body.mapOpen{overflow:hidden}
   }
 
   var CHIP_LBL = { svvrest:"Rasteplass SVV", svvmin:"Vegminner SVV" };
-  var CAT_LBL = { family:"Familie", sport:"Friluft og sport", culture:"Kultur", food:"Mat og drikke" };
+  var CAT_LBL = { family:"Familie", sport:"Sport og friluft", culture:"Kultur", food:"Mat og drikke" };
   // The result chips double as the list chooser when several kinds are selected
   function chipKeys(){
     var k = [];
