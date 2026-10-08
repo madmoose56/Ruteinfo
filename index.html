@@ -1716,7 +1716,12 @@ body.mapOpen{overflow:hidden}
     } else searchFrom(p.a, p.b);
   }
   // ---- Traffic messages from Statens vegvesen (DATEX), through our own Cloudflare Worker ----
-  var TRAFFIC_URL = "https://ruteinfo-trafikk.stein-arne.workers.dev/";   // our Cloudflare Worker; empty = traffic warnings switched off
+  // Vegvesenet's open traffic messages (the same as vegvesen.no/trafikk). They allow this site to read them directly.
+  var TRAFFIC_URL = "https://traffic-info.atlas.vegvesen.no/traffic-information/messages?isActiveNow=true&";   // empty = switched off
+  // To save mobile data only messages that matter are fetched (no small road works); the whole set every 10 min,
+  // the urgent warnings (accidents, things or animals on the road, landslides …) every 2 min
+  var TRAFFIC_FULL = ["trafficImpact=large,very_large", "type=RoadClosed,RoadClosedForWinter,Warning,GeneralWarning"], TRAFFIC_WARN = "type=Warning,GeneralWarning";
+  var tCache = { full:[], fullAt:0, warn:[], warnAt:0 };
   var traffic = { list:[], alt:false, busy:false, msg:"", loaded:false, open:false };
   var TRAFFIC_LBL = { Accident:"Ulykke", VehicleObstruction:"Kjøretøy i vegen", AnimalPresenceObstruction:"Dyr i vegen", GeneralObstruction:"Hindring i vegen",
     EnvironmentalObstruction:"Ras, flom eller hindring", InfrastructureDamageObstruction:"Skade på vegen", PoorEnvironmentConditions:"Dårlig vær/føre",
@@ -1753,12 +1758,51 @@ body.mapOpen{overflow:hidden}
     var dLa = padKm/111.32, dLo = padKm/(111.32*Math.cos(((la0+la1)/2)*Math.PI/180));
     return [la0-dLa, lo0-dLo, la1+dLa, lo1+dLo].map(function(v){ return v.toFixed(4); }).join(",");
   }
-  function loadTraffic(){
+  // One GeoJSON answer -> short items { id, type, sub, label, impact, status, text, road, place, start, end, points:[[lat,lon]] }
+  function trimTraffic(geo){
+    var out = [];
+    ((geo && geo.features) || []).forEach(function(f){
+      var p = f.properties || {}, g = f.geometry || {}, pts = [];
+      if(p.isActiveNow === false) return;
+      function add(c){ if(c && typeof c[0] === "number") pts.push([c[1], c[0]]); }
+      if(g.type === "Point") add(g.coordinates);
+      else if(g.type === "LineString" || g.type === "MultiPoint") (g.coordinates||[]).forEach(add);
+      else if(g.type === "MultiLineString") (g.coordinates||[]).forEach(function(l){ l.forEach(add); });
+      if(!pts.length) return;
+      var ev = p.trafficEvent || {}, loc = p.locationDescriptionDetails || {}, seen = {}, roads = [];
+      (((p.location||{}).roads)||[]).forEach(function(rd){ if(rd.number && !seen[rd.number]){ seen[rd.number] = 1; roads.push(rd.number); } });
+      out.push({ id:p.id||"", type:p.type||"", sub:ev.trafficEventType||"", label:ev.trafficEventDescription||"", impact:p.trafficImpact||"",
+        status:p.trafficStatus||"", text:String(p.descriptionOfTrafficMessage||"").split("|").map(function(t){ return t.trim(); }).filter(Boolean).join(" ").slice(0,500),
+        road:roads.join(", "), place:loc.simpleLocationDescription || p.descriptionOfLocation || "", start:p.startTime||"", end:p.estimatedEndTime||"",
+        points:pts.slice(0,40) });
+    });
+    return out;
+  }
+  function fetchTraffic(q){
+    return fetchTimeout(TRAFFIC_URL+q, { headers:{ "X-System-ID":"ruteinfo", "Accept":"application/vnd.svv.v1+geo+json" } }, 25000)
+      .then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); }).then(trimTraffic);
+  }
+  function isWarn(it){ return it.type === "Warning" || it.type === "GeneralWarning"; }
+  // All relevant messages in Norway, fetched as seldom as possible
+  function trafficItems(force){
+    var now = Date.now();
+    if(force || now - tCache.fullAt > 10*60*1000){
+      return Promise.all(TRAFFIC_FULL.map(fetchTraffic)).then(function(res){
+        var seen = {}, all = [];
+        res[0].concat(res[1]).forEach(function(it){ if(!seen[it.id]){ seen[it.id] = 1; all.push(it); } });
+        tCache.full = all; tCache.fullAt = tCache.warnAt = now; tCache.warn = all.filter(isWarn);
+        return all;
+      });
+    }
+    var warns = now - tCache.warnAt > 90*1000 ? fetchTraffic(TRAFFIC_WARN).then(function(w){ tCache.warn = w; tCache.warnAt = now; return w; }) : Promise.resolve(tCache.warn);
+    return warns.then(function(w){ return tCache.full.filter(function(it){ return !isWarn(it); }).concat(w); });
+  }
+  function loadTraffic(force){
     var r = state.route;
     if(!TRAFFIC_URL || !r || state.near || !r.len){ traffic.list = []; renderTraffic(); return; }
     var tok = state.token;
-    return fetchTimeout(TRAFFIC_URL+"?bbox="+routeBox(r, 1), null, 20000).then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
-      .then(function(j){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(j.items||[], r); traffic.loaded = true; renderTraffic(); })
+    return trafficItems(force)
+      .then(function(items){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(items, r); traffic.loaded = true; renderTraffic(); })
       .then(function(){ return true; }, function(){ return false; });   // on failure: no warning is better than a false one
   }
   function esc(t){ var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
