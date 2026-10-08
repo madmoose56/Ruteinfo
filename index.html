@@ -1736,7 +1736,10 @@ body.mapOpen{overflow:hidden}
   // Vegvesenet's open traffic messages: RoadWork, RoadClosed, RoadClosedForWinter, Warning, GeneralWarning
   var TRAFFIC_TYPE = { RoadWork:"Vegarbeid", RoadClosed:"Stengt veg", RoadClosedForWinter:"Vinterstengt", Warning:"Varsel", GeneralWarning:"Varsel" };
   function trafficLabel(it){
-    if(it.status === "RoadClosed" && it.type !== "RoadClosed") return "Stengt veg – "+(it.label || TRAFFIC_TYPE[it.type] || "hendelse").toLowerCase();
+    if(it.status === "RoadClosed" || it.type === "RoadClosed"){
+      var what = (it.label || "").toLowerCase();
+      return what && what !== "stengt veg" ? "Stengt veg – "+what : "Stengt veg";
+    }
     return it.label || TRAFFIC_TYPE[it.type] || TRAFFIC_SUB[it.sub] || TRAFFIC_LBL[it.type] || "Trafikkmelding";
   }
   // closed roads, big delays and warnings (accidents, things on the road, landslides …) offer a detour
