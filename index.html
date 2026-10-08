@@ -1711,7 +1711,7 @@ body.mapOpen{overflow:hidden}
     } else searchFrom(p.a, p.b);
   }
   // ---- Traffic messages from Statens vegvesen (DATEX), through our own Cloudflare Worker ----
-  var TRAFFIC_URL = "";   // the Worker's address; empty = traffic warnings switched off
+  var TRAFFIC_URL = "https://ruteinfo-trafikk.stein-arne.workers.dev/";   // our Cloudflare Worker; empty = traffic warnings switched off
   var traffic = { list:[], alt:false, busy:false, msg:"", loaded:false, open:false };
   var TRAFFIC_LBL = { Accident:"Ulykke", VehicleObstruction:"Kjøretøy i vegen", AnimalPresenceObstruction:"Dyr i vegen", GeneralObstruction:"Hindring i vegen",
     EnvironmentalObstruction:"Ras, flom eller hindring", InfrastructureDamageObstruction:"Skade på vegen", PoorEnvironmentConditions:"Dårlig vær/føre",
@@ -1723,8 +1723,17 @@ body.mapOpen{overflow:hidden}
   // Events that may block or delay the trip: these offer an alternative route
   var TRAFFIC_SERIOUS = { Accident:1, VehicleObstruction:1, AnimalPresenceObstruction:1, GeneralObstruction:1, EnvironmentalObstruction:1,
     InfrastructureDamageObstruction:1, RoadOrCarriagewayOrLaneManagement:1, AbnormalTraffic:1, ReroutingManagement:1 };
-  function trafficLabel(it){ return TRAFFIC_SUB[it.sub] || TRAFFIC_LBL[it.type] || "Trafikkmelding"; }
-  function trafficSerious(it){ return TRAFFIC_SERIOUS[it.type] || it.sub === "roadClosed" || it.sub === "convoyService"; }
+  // Vegvesenet's open traffic messages: RoadWork, RoadClosed, RoadClosedForWinter, Warning, GeneralWarning
+  var TRAFFIC_TYPE = { RoadWork:"Vegarbeid", RoadClosed:"Stengt veg", RoadClosedForWinter:"Vinterstengt", Warning:"Varsel", GeneralWarning:"Varsel" };
+  function trafficLabel(it){
+    if(it.status === "RoadClosed" && it.type !== "RoadClosed") return "Stengt veg – "+(it.label || TRAFFIC_TYPE[it.type] || "hendelse").toLowerCase();
+    return it.label || TRAFFIC_TYPE[it.type] || TRAFFIC_SUB[it.sub] || TRAFFIC_LBL[it.type] || "Trafikkmelding";
+  }
+  // closed roads, big delays and warnings (accidents, things on the road, landslides …) offer a detour
+  function trafficSerious(it){
+    return it.status === "RoadClosed" || it.type === "RoadClosed" || it.type === "RoadClosedForWinter" || it.type === "Warning" || it.type === "GeneralWarning"
+      || it.impact === "large" || it.impact === "very_large" || TRAFFIC_SERIOUS[it.type] || it.sub === "roadClosed" || it.sub === "convoyService";
+  }
   // A message affects the route when one of its points lies within 300 m of the road we drive
   function trafficOnRoute(items, route){
     return items.map(function(it){
@@ -1760,7 +1769,7 @@ body.mapOpen{overflow:hidden}
       var html = "<ul>";
       list.forEach(function(x){
         var it = x.it, meta = ["ca. "+fmtKm(x.along)+" km fra "+state.from[0]];
-        if(it.road) meta.push(it.road);
+        if(it.place) meta.push(it.place); else if(it.road) meta.push(it.road);
         html += "<li><b>"+esc(trafficLabel(it))+"</b>"+(it.text ? " – "+esc(it.text) : "")+'<div class="tmeta">'+esc(meta.join(" · "))+"</div></li>";
       });
       det.innerHTML = html+"</ul>"; det.hidden = !traffic.open;
