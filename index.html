@@ -1744,12 +1744,14 @@ body.mapOpen{overflow:hidden}
     return it.status === "RoadClosed" || it.type === "RoadClosed" || it.type === "RoadClosedForWinter" || it.type === "Warning" || it.type === "GeneralWarning"
       || it.impact === "large" || it.impact === "very_large" || TRAFFIC_SERIOUS[it.type] || it.sub === "roadClosed" || it.sub === "convoyService";
   }
-  // A message affects the route when one of its points lies within 300 m of the road we drive
+  // A message affects the route when one of its points lies within 300 m of the road we drive (1.2 km for a stretch)
   function trafficOnRoute(items, route){
     return items.map(function(it){
       var best = null;
       (it.points||[]).forEach(function(q){ var pl = place(route, q[0], q[1]); if(!best || pl.off < best.off) best = pl; });
-      return best && best.off <= 0.3 ? { it:it, along:best.along } : null;
+      // a stretch ("A - B") is given as one point somewhere along it, so allow more slack for those
+      var slack = / - /.test(it.place||"") ? 1.2 : 0.3;
+      return best && best.off <= slack ? { it:it, along:best.along } : null;
     }).filter(Boolean).sort(function(a,b){ return a.along-b.along; });
   }
   function routeBox(route, padKm){
