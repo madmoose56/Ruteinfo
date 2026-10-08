@@ -152,7 +152,10 @@ button.idx{border:0;padding:0;cursor:pointer}
 .tdetail .tmeta{font-size:12px;color:#55635B}
 .tline .tmsg{font-size:12.5px;margin:6px 0 0;color:#92400E}
 .tline .tmsg:empty{display:none}
-.detourBtn{position:absolute;top:10px;right:10px;z-index:950;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:2px solid #fff;background:#92400E;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:pointer}
+.checkBtn{position:absolute;top:10px;right:10px;z-index:950;font:700 13px system-ui,sans-serif;padding:7px 10px;border-radius:8px;border:2px solid #fff;background:#14423A;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:pointer;max-width:calc(100% - 64px)}
+.checkBtn[hidden]{display:none}
+.checkBtn:disabled{opacity:.75}
+.detourBtn{position:absolute;top:52px;right:10px;z-index:950;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:2px solid #fff;background:#92400E;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:pointer}
 .detourBtn.back{background:#14423A}
 .detourBtn[hidden]{display:none}
 .detourBtn:disabled{opacity:.7}
@@ -302,6 +305,7 @@ body.mapOpen{overflow:hidden}
       <div id="mapWrap">
         <div class="mapTap" role="button" aria-label="Åpne kartet i full skjerm"></div>
         <button type="button" class="mapBack">‹ Tilbake</button>
+        <button type="button" class="checkBtn" id="checkBtn" hidden>Sjekk trafikkmeldinger</button>
         <button type="button" class="detourBtn" id="detourBtn" hidden>Omkjøring</button>
       <div id="map" role="region" aria-label="Kart over ruta"></div>
       </div>
@@ -1739,13 +1743,14 @@ body.mapOpen{overflow:hidden}
     var r = state.route;
     if(!TRAFFIC_URL || !r || state.near || !r.len){ traffic.list = []; renderTraffic(); return; }
     var tok = state.token;
-    fetchTimeout(TRAFFIC_URL+"?bbox="+routeBox(r, 1), null, 20000).then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
+    return fetchTimeout(TRAFFIC_URL+"?bbox="+routeBox(r, 1), null, 20000).then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
       .then(function(j){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(j.items||[], r); traffic.loaded = true; renderTraffic(); })
-      .catch(function(){});   // no warning is better than a false one
+      .then(function(){ return true; }, function(){ return false; });   // on failure: no warning is better than a false one
   }
   function esc(t){ var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
   function renderTraffic(){
     var line = $("tline"), list = traffic.list, det = $("tdetail"), btn = $("tlineBtn"), dt = $("detourBtn");
+    $("checkBtn").hidden = !TRAFFIC_URL || !state.route || state.near || !state.route.len;
     if(!TRAFFIC_URL || !state.route || state.near || !traffic.loaded){ line.hidden = true; dt.hidden = true; return; }
     var serious = list.some(function(x){ return trafficSerious(x.it); });
     line.hidden = false; line.classList.toggle("warn", list.length > 0);
@@ -1804,6 +1809,16 @@ body.mapOpen{overflow:hidden}
       searchFrom(a, b, false, best);
     }).catch(function(){ traffic.busy = false; traffic.msg = "Fikk ikke hentet andre veivalg akkurat nå. Prøv igjen om litt."; renderTraffic(); });
   }
+  // Check right now, in addition to every two minutes
+  $("checkBtn").addEventListener("click", function(e){
+    e.stopPropagation();
+    var b = this; if(b.disabled) return;
+    b.disabled = true; b.textContent = "Sjekker …";
+    Promise.resolve(loadTraffic()).then(function(ok){
+      b.textContent = ok === false ? "Fikk ikke sjekket – prøv igjen" : "Sjekket "+new Date().toLocaleTimeString("nb-NO",{hour:"2-digit",minute:"2-digit"});
+      setTimeout(function(){ b.disabled = false; b.textContent = "Sjekk trafikkmeldinger"; }, 3000);
+    });
+  });
   $("tlineBtn").addEventListener("click", function(){ if(!traffic.list.length) return; traffic.open = !traffic.open; renderTraffic(); });
   $("detourBtn").addEventListener("click", function(e){
     e.stopPropagation();
