@@ -142,9 +142,9 @@ button.idx{border:0;padding:0;cursor:pointer}
 /* Traffic status: a slim line at the top of the map card, green when clear, brown with OBS! when something is on the route */
 .tline{margin:-4px 0 12px;border-radius:8px;overflow:hidden}
 .tline[hidden]{display:none}
-.tlineBtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:13.5px;font-weight:600;padding:7px 12px;border:0;cursor:default;background:var(--band);color:var(--ink)}
+.tlineBtn{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;width:100%;text-align:left;font:inherit;font-size:13.5px;font-weight:600;padding:7px 12px;border:0;cursor:default;background:var(--band);color:var(--ink)}
 .tline.warn .tlineBtn{background:#92400E;color:#fff;cursor:pointer}
-.tlineBtn .arrow{margin-left:auto;font-weight:400}
+.tlineBtn .arrow{margin-left:auto;flex:none;font-size:12.5px;font-weight:700;background:#fff;color:#92400E;border-radius:6px;padding:4px 9px;white-space:nowrap}
 .tdetail{background:#FFFBEB;color:#16201B;border:1px solid #D6A15E;border-top:0;border-radius:0 0 8px 8px;padding:8px 12px;font-size:13.5px;line-height:1.4}
 .tdetail[hidden]{display:none}
 .tdetail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
@@ -1759,7 +1759,7 @@ body.mapOpen{overflow:hidden}
     var serious = list.some(function(x){ return trafficSerious(x.it); });
     line.hidden = false; line.classList.toggle("warn", list.length > 0);
     if(list.length){
-      btn.innerHTML = "OBS! Trafikkmeldinger på denne ruta ("+list.length+')<span class="arrow">'+(traffic.open ? "▴" : "▾")+"</span>";
+      btn.innerHTML = "OBS! Trafikkmeldinger på denne ruta ("+list.length+')<span class="arrow">'+(traffic.open ? "Skjul trafikkmeldinger ▴" : "Vis trafikkmeldinger ▾")+"</span>";
       btn.setAttribute("aria-expanded", traffic.open ? "true" : "false");
       var html = "<ul>";
       list.forEach(function(x){
