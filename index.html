@@ -145,6 +145,9 @@ button.idx{border:0;padding:0;cursor:pointer}
 .trow{display:flex;align-items:center;gap:10px;padding:7px 8px 7px 14px;min-height:44px}
 .tlineBtn{flex:1 1 auto;min-width:0;text-align:left;font:inherit;font-size:14px;font-weight:600;padding:4px 0;border:0;background:none;color:var(--ink-2);cursor:default}
 .tline.warn{background:#92400E;border-color:#92400E}
+/* no messages: the text sits in a green-grey field (like the map legend) inside the white box */
+.tline:not(.warn) .trow{background:var(--band);margin:8px;border-radius:8px;min-height:38px}
+.tline:not(.warn) .tlineBtn{color:var(--ink)}
 .tline.warn .tlineBtn{color:#fff;cursor:pointer}
 .tlineBtn .arrow{font-weight:400;margin-left:4px}
 .detourBtn{flex:none;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:0;background:#fff;color:#92400E;cursor:pointer}
