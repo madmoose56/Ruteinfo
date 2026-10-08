@@ -150,6 +150,7 @@ button.idx{border:0;padding:0;cursor:pointer}
 .tline:not(.warn) .tlineBtn{color:var(--ink)}
 .tline.warn .tlineBtn{color:#fff;cursor:pointer}
 .tlineBtn .arrow{font-weight:400;margin-left:4px}
+.twm span{display:grid;place-items:center;width:28px;height:28px;margin:1px;border-radius:6px;background:#92400E;color:#fff;border:2px solid #fff;font:700 16px system-ui,sans-serif;box-shadow:0 1px 6px rgba(0,0,0,.5)}
 .detourBtn{flex:none;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:0;background:#fff;color:#92400E;cursor:pointer}
 .detourBtn.back{background:#14423A;color:#fff}
 .detourBtn[hidden]{display:none}
@@ -1145,7 +1146,7 @@ body.mapOpen{overflow:hidden}
     syncSlider();
   }
   function drawChart(){
-    var host = $("chart"); host.textContent = "";
+    var host = $("chart"), keepScroll = host.scrollLeft; host.textContent = "";
     var a = state.from, b = state.to, route = state.route;
     if(!a||!b||!route||state.near||!route.len) return;
     var L = route.len, C = state.corridor, z = chartZoom;
@@ -1190,11 +1191,18 @@ body.mapOpen{overflow:hidden}
       var lx = Math.max(ml+14, Math.min(W-mr-14, mx));
       svg.appendChild(el("text",{x:lx,y:Math.max(12,my-14),"text-anchor":"middle",fill:"#1D4ED8","font-size":12,"font-weight":700},"Du"));
     }
+    // traffic messages on the road: brown warning signs
+    ((typeof traffic !== "undefined" && traffic.list) || []).forEach(function(x){
+      var tx = xs(Math.max(0, Math.min(L, x.along)));
+      svg.appendChild(el("polygon",{points:[tx,cy-17,tx+15,cy+9,tx-15,cy+9].join(","),fill:"#92400E",stroke:"#fff","stroke-width":2,"stroke-linejoin":"round"}));
+      svg.appendChild(el("text",{x:tx,y:cy+6,"text-anchor":"middle",fill:"#fff","font-size":13,"font-weight":700,"font-family":"system-ui, sans-serif"},"!"));
+    });
     host.appendChild(svg);
+    host.scrollLeft = keepScroll;
   }
 
 
-  var lmap = null, mapLayer = null, meLayer = null, markerById = {}, fitPending = true;
+  var lmap = null, mapLayer = null, meLayer = null, trafficLayer = null, markerById = {}, fitPending = true;
   function initMap(){
     if(typeof L === "undefined"){ $("mapCard").hidden = true; return; }
     lmap = L.map("map", { scrollWheelZoom:false, zoomSnap:0.25 }).setView([64,12],4);
@@ -1202,6 +1210,7 @@ body.mapOpen{overflow:hidden}
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(lmap);
     mapLayer = L.layerGroup().addTo(lmap);
     meLayer = L.layerGroup().addTo(lmap);
+    trafficLayer = L.layerGroup().addTo(lmap);
   }
   // Directions: opens the phone's own map app with navigation from the current position
   function gDirUrl(h){ return "https://www.google.com/maps/dir/?api=1&destination="+h.lat+","+h.lon+"&travelmode=driving&dir_action=navigate"; }
@@ -1811,7 +1820,21 @@ body.mapOpen{overflow:hidden}
       .then(function(){ return true; }, function(){ return false; });   // on failure: no warning is better than a false one
   }
   function esc(t){ var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+  // Warning signs on the map where the messages are
+  function drawTrafficOnMap(){
+    if(!trafficLayer) return;
+    trafficLayer.clearLayers();
+    traffic.list.forEach(function(x){
+      var it = x.it, q = it.points[0], d = document.createElement("div");
+      var b = document.createElement("b"); b.textContent = trafficLabel(it); d.appendChild(b);
+      if(it.text){ var t = document.createElement("div"); t.textContent = it.text; d.appendChild(t); }
+      if(it.place){ var m = document.createElement("div"); m.style.fontSize = "12px"; m.style.color = "#55635B"; m.textContent = it.place; d.appendChild(m); }
+      L.marker(q, { icon:L.divIcon({ className:"twm", html:"<span>⚠</span>", iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-14] }), title:trafficLabel(it), zIndexOffset:1000 })
+        .bindPopup(d).addTo(trafficLayer);
+    });
+  }
   function renderTraffic(){
+    drawTrafficOnMap(); drawChart();
     var line = $("tline"), list = traffic.list, det = $("tdetail"), btn = $("tlineBtn"), dt = $("detourBtn");
     if(!TRAFFIC_URL || !state.route || state.near || !traffic.loaded){ line.hidden = true; dt.hidden = true; return; }
     var serious = list.some(function(x){ return trafficSerious(x.it); });
@@ -1837,6 +1860,18 @@ body.mapOpen{overflow:hidden}
     dt.textContent = traffic.busy ? "Leter …" : traffic.alt ? "Vanlig rute" : "Anbefalt omkjøring";
     dt.disabled = traffic.busy;
   }
+  // A route that drives into a dead end and back (comes back within 150 m of a place it passed 2+ km earlier)
+  function doublesBack(route){
+    var pts = [], next = 0;
+    for(var i=0;i<route.pts.length;i++){ if(route.cum[i] >= next){ pts.push([route.pts[i], route.cum[i]]); next = route.cum[i] + 0.4; } }
+    for(var a=0;a<pts.length;a++){
+      for(var b=a+1;b<pts.length;b++){
+        if(pts[b][1] - pts[a][1] < 2) continue;
+        if(Math.hypot(pts[b][0][0]-pts[a][0][0], pts[b][0][1]-pts[a][0][1]) < 0.15) return true;
+      }
+    }
+    return false;
+  }
   // Ask the router for other ways and take the shortest one that stays at least 1 km away from the trouble
   function findAltRoute(){
     var a = state.from, b = state.to, bad = traffic.list.filter(function(x){ return trafficSerious(x.it); }).map(function(x){ return x.it; });
@@ -1852,7 +1887,7 @@ body.mapOpen{overflow:hidden}
       var k = 1; while(k < cur.cum.length-1 && cur.cum[k] < first.along) k++;
       var p0 = cur.pts[Math.max(0,k-1)], p1 = cur.pts[Math.min(cur.pts.length-1,k+1)], dx = p1[0]-p0[0], dy = p1[1]-p0[1], l = Math.hypot(dx,dy) || 1;
       var c0 = cur.latlons[k], kx = 111.32*Math.cos(c0[0]*Math.PI/180);
-      [8,-8,20,-20].forEach(function(d){ vias.push([c0[0] + (dx/l)*d/110.57, c0[1] - (dy/l)*d/kx]); });   // perpendicular to the road
+      [6,-6,12,-12,25,-25].forEach(function(d){ vias.push([c0[0] + (dx/l)*d/110.57, c0[1] - (dy/l)*d/kx]); });   // perpendicular to the road
     }
     var jobs = [ask(a[2]+","+a[1]+";"+b[2]+","+b[1], "&alternatives=3")].concat(vias.map(function(v){
       return ask(a[2]+","+a[1]+";"+v[1].toFixed(5)+","+v[0].toFixed(5)+";"+b[2]+","+b[1]);
@@ -1863,7 +1898,7 @@ body.mapOpen{overflow:hidden}
         var c = rt.geometry && rt.geometry.coordinates; if(!c || c.length < 2) return;
         var route = buildRoute(c.map(function(q){ return [q[1],q[0]]; }), "vei"), clear = Infinity;
         bad.forEach(function(it){ (it.points||[]).forEach(function(q){ clear = Math.min(clear, place(route, q[0], q[1]).off); }); });
-        if(clear >= 1 && route.len <= limit && (!best || route.len < best.len)) best = route;
+        if(clear >= 1 && route.len <= limit && !doublesBack(route) && (!best || route.len < best.len)) best = route;
       }); });
       traffic.busy = false;
       if(!best){ traffic.msg = "Fant ingen annen vei som unngår dette. Følg skilting og oppdateringer fra Vegvesenet."; renderTraffic(); return; }
