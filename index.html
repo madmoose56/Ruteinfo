@@ -139,19 +139,23 @@ button.idx{border:0;padding:0;cursor:pointer}
 .cities label,.cities .lbl{min-width:0}
 .fromMode{flex-wrap:nowrap;gap:4px}
 .ac{position:relative}
-/* Traffic warning above the route map */
-.trafficCard{border:2px solid #B45309;background:#FFFBEB;color:#16201B}
-.trafficCard[hidden]{display:none}
-.trafficCard h2{font-family:var(--font-display);font-size:20px;margin:0 0 8px;color:#92400E}
-.trafficCard ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.trafficCard li{font-size:14px;line-height:1.4}
-.trafficCard li b{color:#92400E}
-.trafficCard .tmeta{font-size:12.5px;color:#55635B}
-.trafficCard .tbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
-.trafficCard .tbtns button{font:inherit;font-size:15px;font-weight:700;border-radius:8px;padding:9px 14px;min-height:42px;cursor:pointer;border:2px solid #B45309;background:#B45309;color:#fff}
-.trafficCard .tbtns button.ghost{background:#fff;color:#92400E}
-.trafficCard .tmsg{font-size:13.5px;margin:10px 0 0;color:#92400E}
-.trafficCard .tmsg:empty{display:none}
+/* Traffic status: a slim line at the top of the map card, green when clear, brown with OBS! when something is on the route */
+.tline{margin:-4px 0 12px;border-radius:8px;overflow:hidden}
+.tline[hidden]{display:none}
+.tlineBtn{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:13.5px;font-weight:600;padding:7px 12px;border:0;cursor:default;background:#DCFCE7;color:#14532D}
+.tline.warn .tlineBtn{background:#92400E;color:#fff;cursor:pointer}
+.tlineBtn .arrow{margin-left:auto;font-weight:400}
+.tdetail{background:#FFFBEB;color:#16201B;border:1px solid #D6A15E;border-top:0;border-radius:0 0 8px 8px;padding:8px 12px;font-size:13.5px;line-height:1.4}
+.tdetail[hidden]{display:none}
+.tdetail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.tdetail b{color:#92400E}
+.tdetail .tmeta{font-size:12px;color:#55635B}
+.tline .tmsg{font-size:12.5px;margin:6px 0 0;color:#92400E}
+.tline .tmsg:empty{display:none}
+.detourBtn{position:absolute;top:10px;right:10px;z-index:950;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:2px solid #fff;background:#92400E;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:pointer}
+.detourBtn.back{background:#14423A}
+.detourBtn[hidden]{display:none}
+.detourBtn:disabled{opacity:.7}
 .chainBox{margin-top:12px}
 .chainBox[hidden]{display:none}
 .chainChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0}
@@ -284,9 +288,12 @@ body.mapOpen{overflow:hidden}
     </form>
   </section>
 
-  <section class="card trafficCard" id="trafficCard" hidden aria-live="polite"></section>
-
   <section class="card" id="mapCard">
+    <div class="tline" id="tline" hidden aria-live="polite">
+      <button type="button" class="tlineBtn" id="tlineBtn" aria-expanded="false"></button>
+      <div class="tdetail" id="tdetail" hidden></div>
+      <p class="tmsg" id="tmsg"></p>
+    </div>
     <div class="mapbox">
       <div class="side">
       <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Overnatting</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass</span><span id="lgSvvmin" hidden><i class="vms" title="Skilt 640.10 Severdighet">⌘</i>Severdighet</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
@@ -295,6 +302,7 @@ body.mapOpen{overflow:hidden}
       <div id="mapWrap">
         <div class="mapTap" role="button" aria-label="Åpne kartet i full skjerm"></div>
         <button type="button" class="mapBack">‹ Tilbake</button>
+        <button type="button" class="detourBtn" id="detourBtn" hidden>Omkjøring</button>
       <div id="map" role="region" aria-label="Kart over ruta"></div>
       </div>
     </div>
@@ -1700,7 +1708,7 @@ body.mapOpen{overflow:hidden}
   }
   // ---- Traffic messages from Statens vegvesen (DATEX), through our own Cloudflare Worker ----
   var TRAFFIC_URL = "";   // the Worker's address; empty = traffic warnings switched off
-  var traffic = { list:[], alt:false, busy:false, msg:"" };
+  var traffic = { list:[], alt:false, busy:false, msg:"", loaded:false, open:false };
   var TRAFFIC_LBL = { Accident:"Ulykke", VehicleObstruction:"Kjøretøy i vegen", AnimalPresenceObstruction:"Dyr i vegen", GeneralObstruction:"Hindring i vegen",
     EnvironmentalObstruction:"Ras, flom eller hindring", InfrastructureDamageObstruction:"Skade på vegen", PoorEnvironmentConditions:"Dårlig vær/føre",
     RoadOrCarriagewayOrLaneManagement:"Stengt eller redusert veg", MaintenanceWorks:"Vegarbeid", ConstructionWorks:"Vegarbeid", AbnormalTraffic:"Kø",
@@ -1732,36 +1740,41 @@ body.mapOpen{overflow:hidden}
     if(!TRAFFIC_URL || !r || state.near || !r.len){ traffic.list = []; renderTraffic(); return; }
     var tok = state.token;
     fetchTimeout(TRAFFIC_URL+"?bbox="+routeBox(r, 1), null, 20000).then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
-      .then(function(j){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(j.items||[], r); renderTraffic(); })
+      .then(function(j){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(j.items||[], r); traffic.loaded = true; renderTraffic(); })
       .catch(function(){});   // no warning is better than a false one
   }
   function esc(t){ var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
   function renderTraffic(){
-    var card = $("trafficCard"), list = traffic.list;
-    if(!list.length && !traffic.alt){ card.hidden = true; card.innerHTML = ""; return; }
-    var serious = list.some(function(x){ return trafficSerious(x.it); }), html = "";
-    html += "<h2>"+(list.length ? "⚠ "+(list.length === 1 ? "Trafikkmelding på ruta" : list.length+" trafikkmeldinger på ruta") : "✓ Ingen trafikkmeldinger på denne ruta")+"</h2>";
+    var line = $("tline"), list = traffic.list, det = $("tdetail"), btn = $("tlineBtn"), dt = $("detourBtn");
+    if(!TRAFFIC_URL || !state.route || state.near || !traffic.loaded){ line.hidden = true; dt.hidden = true; return; }
+    var serious = list.some(function(x){ return trafficSerious(x.it); });
+    line.hidden = false; line.classList.toggle("warn", list.length > 0);
     if(list.length){
-      html += "<ul>";
+      btn.innerHTML = "OBS! Trafikkmeldinger på denne ruta ("+list.length+')<span class="arrow">'+(traffic.open ? "▴" : "▾")+"</span>";
+      btn.setAttribute("aria-expanded", traffic.open ? "true" : "false");
+      var html = "<ul>";
       list.forEach(function(x){
         var it = x.it, meta = ["ca. "+fmtKm(x.along)+" km fra "+state.from[0]];
         if(it.road) meta.push(it.road);
         html += "<li><b>"+esc(trafficLabel(it))+"</b>"+(it.text ? " – "+esc(it.text) : "")+'<div class="tmeta">'+esc(meta.join(" · "))+"</div></li>";
       });
-      html += "</ul>";
+      det.innerHTML = html+"</ul>"; det.hidden = !traffic.open;
+    } else {
+      btn.textContent = traffic.alt ? "✓ Omkjøring – ingen trafikkmeldinger på denne ruta" : "✓ Ingen trafikkmeldinger på denne ruta";
+      btn.setAttribute("aria-expanded","false"); det.hidden = true; det.innerHTML = "";
     }
-    html += '<div class="tbtns">';
-    if(traffic.alt) html += '<button type="button" class="ghost" data-t="base">Tilbake til vanlig rute</button>';
-    else if(serious) html += '<button type="button" data-t="alt"'+(traffic.busy?" disabled":"")+'>Vil du ha en alternativ rute?</button>';
-    html += "</div>";
-    html += '<p class="tmsg">'+esc(traffic.alt ? "Du ser nå en alternativ rute som unngår hindringen." : traffic.msg)+"</p>";
-    card.innerHTML = html; card.hidden = false;
+    $("tmsg").textContent = traffic.msg;
+    // the detour choice on the map
+    dt.hidden = !(traffic.alt || serious);
+    dt.classList.toggle("back", traffic.alt);
+    dt.textContent = traffic.busy ? "Leter …" : traffic.alt ? "Vanlig rute" : "Omkjøring";
+    dt.disabled = traffic.busy;
   }
   // Ask the router for other ways and take the shortest one that stays at least 1 km away from the trouble
   function findAltRoute(){
     var a = state.from, b = state.to, bad = traffic.list.filter(function(x){ return trafficSerious(x.it); }).map(function(x){ return x.it; });
     if(!a || !b || !bad.length) return;
-    traffic.busy = true; traffic.msg = "Leter etter en annen vei …"; renderTraffic();
+    traffic.busy = true; traffic.msg = ""; renderTraffic();
     var OSRM = "https://router.project-osrm.org/route/v1/driving/", tail = "?overview=full&geometries=geojson";
     var ask = function(path, extra){
       return fetchTimeout(OSRM+path+tail+(extra||""), null, 15000).then(function(r){ return r.ok ? r.json() : { routes:[] }; }, function(){ return { routes:[] }; });
@@ -1791,13 +1804,13 @@ body.mapOpen{overflow:hidden}
       searchFrom(a, b, false, best);
     }).catch(function(){ traffic.busy = false; traffic.msg = "Fikk ikke hentet andre veivalg akkurat nå. Prøv igjen om litt."; renderTraffic(); });
   }
-  $("trafficCard").addEventListener("click", function(e){
-    var b = e.target.closest("button"); if(!b) return;
-    if(b.dataset.t === "alt") findAltRoute();
-    else if(b.dataset.t === "base"){ traffic.alt = false; traffic.msg = ""; search(); }
+  $("tlineBtn").addEventListener("click", function(){ if(!traffic.list.length) return; traffic.open = !traffic.open; renderTraffic(); });
+  $("detourBtn").addEventListener("click", function(e){
+    e.stopPropagation();
+    if(traffic.alt){ traffic.alt = false; traffic.msg = ""; search(); } else findAltRoute();
   });
-  // Check again every five minutes while the app is open
-  setInterval(function(){ if(state.started && !busy && !document.hidden) loadTraffic(); }, 5*60*1000);
+  // Check again every two minutes while the app is open
+  setInterval(function(){ if(state.started && !busy && !document.hidden) loadTraffic(); }, 2*60*1000);
 
   function searchFrom(a, b, near, preset){
     var st = $("status"); st.className = "msg";
@@ -1810,7 +1823,7 @@ body.mapOpen{overflow:hidden}
     st.textContent = near ? "" : "Henter veien…";
     // Nær meg: a "route" that is just my position, so every distance is measured from me
     if(!preset){ traffic.alt = false; traffic.msg = ""; }
-    traffic.list = []; renderTraffic();
+    traffic.list = []; traffic.loaded = false; traffic.open = false; renderTraffic();
     var getRoute = preset ? Promise.resolve(preset) : near ? Promise.resolve(buildRoute([[a[1],a[2]],[a[1],a[2]]], "near"))
       : getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); });
     getRoute.then(function(route){
