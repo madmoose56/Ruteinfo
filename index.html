@@ -844,15 +844,34 @@ body.mapOpen{overflow:hidden}
   }
 
   function getRoadRoute(a, b){
-    var url = "https://router.project-osrm.org/route/v1/driving/"+a[2]+","+a[1]+";"+b[2]+","+b[1]+"?overview=full&geometries=geojson";
+    var url = "https://router.project-osrm.org/route/v1/driving/"+a[2]+","+a[1]+";"+b[2]+","+b[1]+"?overview=full&geometries=geojson&steps=true";
     return fetchTimeout(url, null, 12000).then(function(r){
       if(!r.ok) throw new Error("osrm "+r.status);
       return r.json();
     }).then(function(j){
-      var c = j && j.routes && j.routes[0] && j.routes[0].geometry && j.routes[0].geometry.coordinates;
-      if(!c || c.length < 2) throw new Error("no route");
-      return buildRoute(c.map(function(p){ return [p[1],p[0]]; }), "vei");
+      var route = j && j.routes && routeFromOsrm(j.routes[0]);
+      if(!route) throw new Error("no route");
+      return route;
     });
+  }
+  // Road numbers written the same way everywhere: "E 18" / "E18" -> "e18", "Fv354" / "F354" / "354" -> "354"
+  function roadKey(t){
+    t = String(t||"").toLowerCase().replace(/[\s.]/g,"");
+    var m = t.match(/^e(\d+)$/); if(m) return "e"+m[1];
+    m = t.match(/^(?:fv|rv|kv|pv|f|r|k|p)?(\d+)$/); return m ? m[1] : "";
+  }
+  // Route from the router, with the road number of each part (to match traffic messages to the road we drive)
+  function routeFromOsrm(rt){
+    var c = rt && rt.geometry && rt.geometry.coordinates;
+    if(!c || c.length < 2) return null;
+    var route = buildRoute(c.map(function(p){ return [p[1],p[0]]; }), "vei"), roads = [];
+    (rt.legs||[]).forEach(function(leg){ (leg.steps||[]).forEach(function(st){
+      var g = st.geometry && st.geometry.coordinates; if(!st.ref || !g || !g.length) return;
+      var keys = String(st.ref).split(";").map(roadKey).filter(Boolean);
+      if(keys.length) roads.push({ keys:keys, pts:g.map(function(p){ return [p[1],p[0]]; }) });
+    }); });
+    route.roads = roads;
+    return route;
   }
   function getStraightRoute(a, b){ return buildRoute([[a[1],a[2]],[b[1],b[2]]], "linje"); }
 
@@ -1757,13 +1776,34 @@ body.mapOpen{overflow:hidden}
       || it.impact === "large" || it.impact === "very_large" || TRAFFIC_SERIOUS[it.type] || it.sub === "roadClosed" || it.sub === "convoyService";
   }
   // A message affects the route when one of its points lies within 300 m of the road we drive (1.2 km for a stretch)
+  // km from a point to a polyline of [lat,lon]
+  function distToLine(q, pts){
+    var kx = 111.32*Math.cos(q[0]*Math.PI/180), ky = 110.57, px = q[1]*kx, py = q[0]*ky, best = Infinity;
+    for(var i=0;i<pts.length;i++){
+      var ax = pts[i][1]*kx, ay = pts[i][0]*ky;
+      if(i === 0){ best = Math.min(best, Math.hypot(px-ax, py-ay)); continue; }
+      var bx = pts[i-1][1]*kx, by = pts[i-1][0]*ky, dx = ax-bx, dy = ay-by, l2 = dx*dx+dy*dy;
+      var t = l2 ? Math.max(0, Math.min(1, ((px-bx)*dx+(py-by)*dy)/l2)) : 0;
+      best = Math.min(best, Math.hypot(px-(bx+dx*t), py-(by+dy*t)));
+    }
+    return best;
+  }
+  // A message affects the route only when it is on the road we drive: same road number as that part of the route,
+  // and within 300 m of it (1.2 km for a stretch "A - B", which Vegvesenet gives as a single point somewhere along it).
+  // Without road numbers (no router data) we fall back to 300 m from the route line.
   function trafficOnRoute(items, route){
     return items.map(function(it){
-      var best = null;
-      (it.points||[]).forEach(function(q){ var pl = place(route, q[0], q[1]); if(!best || pl.off < best.off) best = pl; });
-      // a stretch ("A - B") is given as one point somewhere along it, so allow more slack for those
-      var slack = / - /.test(it.place||"") ? 1.2 : 0.3;
-      return best && best.off <= slack ? { it:it, along:best.along } : null;
+      var slack = / - /.test(it.place||"") ? 1.2 : 0.3, keys = String(it.road||"").split(",").map(roadKey).filter(Boolean), hit = null;
+      (it.points||[]).forEach(function(q){
+        var ok;
+        if(route.roads && route.roads.length && keys.length){
+          ok = route.roads.some(function(rd){
+            return rd.keys.some(function(k){ return keys.indexOf(k) >= 0; }) && distToLine(q, rd.pts) <= slack;
+          });
+        } else ok = place(route, q[0], q[1]).off <= 0.3;
+        if(ok && !hit) hit = place(route, q[0], q[1]);
+      });
+      return hit ? { it:it, along:hit.along } : null;
     }).filter(Boolean).sort(function(a,b){ return a.along-b.along; });
   }
   function routeBox(route, padKm){
@@ -1877,7 +1917,7 @@ body.mapOpen{overflow:hidden}
     var a = state.from, b = state.to, bad = traffic.list.filter(function(x){ return trafficSerious(x.it); }).map(function(x){ return x.it; });
     if(!a || !b || !bad.length) return;
     traffic.busy = true; traffic.msg = ""; renderTraffic();
-    var OSRM = "https://router.project-osrm.org/route/v1/driving/", tail = "?overview=full&geometries=geojson";
+    var OSRM = "https://router.project-osrm.org/route/v1/driving/", tail = "?overview=full&geometries=geojson&steps=true";
     var ask = function(path, extra){
       return fetchTimeout(OSRM+path+tail+(extra||""), null, 15000).then(function(r){ return r.ok ? r.json() : { routes:[] }; }, function(){ return { routes:[] }; });
     };
@@ -1895,10 +1935,9 @@ body.mapOpen{overflow:hidden}
     Promise.all(jobs).then(function(res){
       var best = null, limit = (cur ? cur.len : 1e9) * 2;   // never more than twice as long
       res.forEach(function(j){ (j.routes||[]).forEach(function(rt){
-        var c = rt.geometry && rt.geometry.coordinates; if(!c || c.length < 2) return;
-        var route = buildRoute(c.map(function(q){ return [q[1],q[0]]; }), "vei"), clear = Infinity;
-        bad.forEach(function(it){ (it.points||[]).forEach(function(q){ clear = Math.min(clear, place(route, q[0], q[1]).off); }); });
-        if(clear >= 1 && route.len <= limit && !doublesBack(route) && (!best || route.len < best.len)) best = route;
+        var route = routeFromOsrm(rt); if(!route) return;
+        // good when none of the problems is on the roads this route drives
+        if(!trafficOnRoute(bad, route).length && route.len <= limit && !doublesBack(route) && (!best || route.len < best.len)) best = route;
       }); });
       traffic.busy = false;
       if(!best){ traffic.msg = "Fant ingen annen vei som unngår dette. Følg skilting og oppdateringer fra Vegvesenet."; renderTraffic(); return; }
