@@ -1760,7 +1760,7 @@ body.mapOpen{overflow:hidden}
       });
       det.innerHTML = html+"</ul>"; det.hidden = !traffic.open;
     } else {
-      btn.textContent = traffic.alt ? "✓ Omkjøring – ingen trafikkmeldinger på denne ruta" : "✓ Ingen trafikkmeldinger på denne ruta";
+      btn.textContent = traffic.alt ? "✓ Omkjøring – ingen hendelser" : "✓ Ingen hendelser";
       btn.setAttribute("aria-expanded","false"); det.hidden = true; det.innerHTML = "";
     }
     $("tmsg").textContent = traffic.msg;
