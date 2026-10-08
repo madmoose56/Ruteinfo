@@ -139,6 +139,19 @@ button.idx{border:0;padding:0;cursor:pointer}
 .cities label,.cities .lbl{min-width:0}
 .fromMode{flex-wrap:nowrap;gap:4px}
 .ac{position:relative}
+/* Traffic warning above the route map */
+.trafficCard{border:2px solid #B45309;background:#FFFBEB;color:#16201B}
+.trafficCard[hidden]{display:none}
+.trafficCard h2{font-family:var(--font-display);font-size:20px;margin:0 0 8px;color:#92400E}
+.trafficCard ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.trafficCard li{font-size:14px;line-height:1.4}
+.trafficCard li b{color:#92400E}
+.trafficCard .tmeta{font-size:12.5px;color:#55635B}
+.trafficCard .tbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.trafficCard .tbtns button{font:inherit;font-size:15px;font-weight:700;border-radius:8px;padding:9px 14px;min-height:42px;cursor:pointer;border:2px solid #B45309;background:#B45309;color:#fff}
+.trafficCard .tbtns button.ghost{background:#fff;color:#92400E}
+.trafficCard .tmsg{font-size:13.5px;margin:10px 0 0;color:#92400E}
+.trafficCard .tmsg:empty{display:none}
 .chainBox{margin-top:12px}
 .chainBox[hidden]{display:none}
 .chainChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0}
@@ -270,6 +283,8 @@ body.mapOpen{overflow:hidden}
       <div class="lbl" id="hitsLbl" hidden>Velg treff<div class="hits" id="hits" aria-live="polite"></div></div>
     </form>
   </section>
+
+  <section class="card trafficCard" id="trafficCard" hidden aria-live="polite"></section>
 
   <section class="card" id="mapCard">
     <div class="mapbox">
@@ -1683,7 +1698,108 @@ body.mapOpen{overflow:hidden}
       });
     } else searchFrom(p.a, p.b);
   }
-  function searchFrom(a, b, near){
+  // ---- Traffic messages from Statens vegvesen (DATEX), through our own Cloudflare Worker ----
+  var TRAFFIC_URL = "";   // the Worker's address; empty = traffic warnings switched off
+  var traffic = { list:[], alt:false, busy:false, msg:"" };
+  var TRAFFIC_LBL = { Accident:"Ulykke", VehicleObstruction:"Kjøretøy i vegen", AnimalPresenceObstruction:"Dyr i vegen", GeneralObstruction:"Hindring i vegen",
+    EnvironmentalObstruction:"Ras, flom eller hindring", InfrastructureDamageObstruction:"Skade på vegen", PoorEnvironmentConditions:"Dårlig vær/føre",
+    RoadOrCarriagewayOrLaneManagement:"Stengt eller redusert veg", MaintenanceWorks:"Vegarbeid", ConstructionWorks:"Vegarbeid", AbnormalTraffic:"Kø",
+    ReroutingManagement:"Omkjøring", WinterDrivingManagement:"Vinterkjøring", SpeedManagement:"Fartsgrense", NetworkManagement:"Trafikkregulering",
+    PublicEvent:"Arrangement", DisturbanceActivity:"Hendelse", AuthorityOperation:"Kontroll/aksjon", RoadsideAssistance:"Bilberging" };
+  var TRAFFIC_SUB = { roadClosed:"Stengt veg", convoyService:"Kolonnekjøring", queuingTraffic:"Kø", stationaryTraffic:"Stillestående kø",
+    slowTraffic:"Sakte trafikk", heavyTraffic:"Tett trafikk", laneClosures:"Felt stengt", singleAlternateLineTraffic:"Vekselvis trafikk" };
+  // Events that may block or delay the trip: these offer an alternative route
+  var TRAFFIC_SERIOUS = { Accident:1, VehicleObstruction:1, AnimalPresenceObstruction:1, GeneralObstruction:1, EnvironmentalObstruction:1,
+    InfrastructureDamageObstruction:1, RoadOrCarriagewayOrLaneManagement:1, AbnormalTraffic:1, ReroutingManagement:1 };
+  function trafficLabel(it){ return TRAFFIC_SUB[it.sub] || TRAFFIC_LBL[it.type] || "Trafikkmelding"; }
+  function trafficSerious(it){ return TRAFFIC_SERIOUS[it.type] || it.sub === "roadClosed" || it.sub === "convoyService"; }
+  // A message affects the route when one of its points lies within 300 m of the road we drive
+  function trafficOnRoute(items, route){
+    return items.map(function(it){
+      var best = null;
+      (it.points||[]).forEach(function(q){ var pl = place(route, q[0], q[1]); if(!best || pl.off < best.off) best = pl; });
+      return best && best.off <= 0.3 ? { it:it, along:best.along } : null;
+    }).filter(Boolean).sort(function(a,b){ return a.along-b.along; });
+  }
+  function routeBox(route, padKm){
+    var la0 = 90, la1 = -90, lo0 = 180, lo1 = -180;
+    route.latlons.forEach(function(q){ if(q[0]<la0) la0=q[0]; if(q[0]>la1) la1=q[0]; if(q[1]<lo0) lo0=q[1]; if(q[1]>lo1) lo1=q[1]; });
+    var dLa = padKm/111.32, dLo = padKm/(111.32*Math.cos(((la0+la1)/2)*Math.PI/180));
+    return [la0-dLa, lo0-dLo, la1+dLa, lo1+dLo].map(function(v){ return v.toFixed(4); }).join(",");
+  }
+  function loadTraffic(){
+    var r = state.route;
+    if(!TRAFFIC_URL || !r || state.near || !r.len){ traffic.list = []; renderTraffic(); return; }
+    var tok = state.token;
+    fetchTimeout(TRAFFIC_URL+"?bbox="+routeBox(r, 1), null, 20000).then(function(x){ if(!x.ok) throw new Error("HTTP "+x.status); return x.json(); })
+      .then(function(j){ if(tok !== state.token || r !== state.route) return; traffic.list = trafficOnRoute(j.items||[], r); renderTraffic(); })
+      .catch(function(){});   // no warning is better than a false one
+  }
+  function esc(t){ var d = document.createElement("div"); d.textContent = t; return d.innerHTML; }
+  function renderTraffic(){
+    var card = $("trafficCard"), list = traffic.list;
+    if(!list.length && !traffic.alt){ card.hidden = true; card.innerHTML = ""; return; }
+    var serious = list.some(function(x){ return trafficSerious(x.it); }), html = "";
+    html += "<h2>"+(list.length ? "⚠ "+(list.length === 1 ? "Trafikkmelding på ruta" : list.length+" trafikkmeldinger på ruta") : "✓ Ingen trafikkmeldinger på denne ruta")+"</h2>";
+    if(list.length){
+      html += "<ul>";
+      list.forEach(function(x){
+        var it = x.it, meta = ["ca. "+fmtKm(x.along)+" km fra "+state.from[0]];
+        if(it.road) meta.push(it.road);
+        html += "<li><b>"+esc(trafficLabel(it))+"</b>"+(it.text ? " – "+esc(it.text) : "")+'<div class="tmeta">'+esc(meta.join(" · "))+"</div></li>";
+      });
+      html += "</ul>";
+    }
+    html += '<div class="tbtns">';
+    if(traffic.alt) html += '<button type="button" class="ghost" data-t="base">Tilbake til vanlig rute</button>';
+    else if(serious) html += '<button type="button" data-t="alt"'+(traffic.busy?" disabled":"")+'>Vil du ha en alternativ rute?</button>';
+    html += "</div>";
+    html += '<p class="tmsg">'+esc(traffic.alt ? "Du ser nå en alternativ rute som unngår hindringen." : traffic.msg)+"</p>";
+    card.innerHTML = html; card.hidden = false;
+  }
+  // Ask the router for other ways and take the shortest one that stays at least 1 km away from the trouble
+  function findAltRoute(){
+    var a = state.from, b = state.to, bad = traffic.list.filter(function(x){ return trafficSerious(x.it); }).map(function(x){ return x.it; });
+    if(!a || !b || !bad.length) return;
+    traffic.busy = true; traffic.msg = "Leter etter en annen vei …"; renderTraffic();
+    var OSRM = "https://router.project-osrm.org/route/v1/driving/", tail = "?overview=full&geometries=geojson";
+    var ask = function(path, extra){
+      return fetchTimeout(OSRM+path+tail+(extra||""), null, 15000).then(function(r){ return r.ok ? r.json() : { routes:[] }; }, function(){ return { routes:[] }; });
+    };
+    // Detours through points 8 and 20 km to each side of the first problem
+    var cur = state.route, first = traffic.list.filter(function(x){ return trafficSerious(x.it); })[0], vias = [];
+    if(first && cur){
+      var k = 1; while(k < cur.cum.length-1 && cur.cum[k] < first.along) k++;
+      var p0 = cur.pts[Math.max(0,k-1)], p1 = cur.pts[Math.min(cur.pts.length-1,k+1)], dx = p1[0]-p0[0], dy = p1[1]-p0[1], l = Math.hypot(dx,dy) || 1;
+      var c0 = cur.latlons[k], kx = 111.32*Math.cos(c0[0]*Math.PI/180);
+      [8,-8,20,-20].forEach(function(d){ vias.push([c0[0] + (dx/l)*d/110.57, c0[1] - (dy/l)*d/kx]); });   // perpendicular to the road
+    }
+    var jobs = [ask(a[2]+","+a[1]+";"+b[2]+","+b[1], "&alternatives=3")].concat(vias.map(function(v){
+      return ask(a[2]+","+a[1]+";"+v[1].toFixed(5)+","+v[0].toFixed(5)+";"+b[2]+","+b[1]);
+    }));
+    Promise.all(jobs).then(function(res){
+      var best = null, limit = (cur ? cur.len : 1e9) * 2;   // never more than twice as long
+      res.forEach(function(j){ (j.routes||[]).forEach(function(rt){
+        var c = rt.geometry && rt.geometry.coordinates; if(!c || c.length < 2) return;
+        var route = buildRoute(c.map(function(q){ return [q[1],q[0]]; }), "vei"), clear = Infinity;
+        bad.forEach(function(it){ (it.points||[]).forEach(function(q){ clear = Math.min(clear, place(route, q[0], q[1]).off); }); });
+        if(clear >= 1 && route.len <= limit && (!best || route.len < best.len)) best = route;
+      }); });
+      traffic.busy = false;
+      if(!best){ traffic.msg = "Fant ingen annen vei som unngår dette. Følg skilting og oppdateringer fra Vegvesenet."; renderTraffic(); return; }
+      traffic.msg = ""; traffic.alt = true;
+      searchFrom(a, b, false, best);
+    }).catch(function(){ traffic.busy = false; traffic.msg = "Fikk ikke hentet andre veivalg akkurat nå. Prøv igjen om litt."; renderTraffic(); });
+  }
+  $("trafficCard").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.t === "alt") findAltRoute();
+    else if(b.dataset.t === "base"){ traffic.alt = false; traffic.msg = ""; search(); }
+  });
+  // Check again every five minutes while the app is open
+  setInterval(function(){ if(state.started && !busy && !document.hidden) loadTraffic(); }, 5*60*1000);
+
+  function searchFrom(a, b, near, preset){
     var st = $("status"); st.className = "msg";
     setBusy(true);
     var p = { a:a, b:b };
@@ -1693,12 +1809,14 @@ body.mapOpen{overflow:hidden}
     $("routeTitle").textContent = p.a[0]+" – "+p.b[0]; $("routeLen").textContent = "";
     st.textContent = near ? "" : "Henter veien…";
     // Nær meg: a "route" that is just my position, so every distance is measured from me
-    var getRoute = near ? Promise.resolve(buildRoute([[a[1],a[2]],[a[1],a[2]]], "near"))
+    if(!preset){ traffic.alt = false; traffic.msg = ""; }
+    traffic.list = []; renderTraffic();
+    var getRoute = preset ? Promise.resolve(preset) : near ? Promise.resolve(buildRoute([[a[1],a[2]],[a[1],a[2]]], "near"))
       : getRoadRoute(p.a, p.b).catch(function(){ return getStraightRoute(p.a, p.b); });
     getRoute.then(function(route){
       if(tok !== state.token) return;
       if(!near) saveLast(p.a, p.b);
-      state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); resetChartView(); fitPending = true; updateMap(); drawMeOnMap(); if(state.me) $("meStatus").textContent = meText();
+      state.route = route; state.started = true; state.view = null; showRouteHeader(); renderList(); resetChartView(); fitPending = true; updateMap(); drawMeOnMap(); loadTraffic(); if(state.me) $("meStatus").textContent = meText();
       var ks = KINDS.filter(function(k){ return state.sel[k]; });
       st.textContent = "Henter "+ks.map(function(k){ return NAMES[k][1]; }).join(", ")+(near ? " nær deg…" : " langs ruta…");
       return loadMany(ks).then(function(){
