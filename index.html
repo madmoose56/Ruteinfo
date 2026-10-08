@@ -140,22 +140,25 @@ button.idx{border:0;padding:0;cursor:pointer}
 .fromMode{flex-wrap:nowrap;gap:4px}
 .ac{position:relative}
 /* Traffic status: a slim line at the top of the map card, green when clear, brown with OBS! when something is on the route */
-.tline{margin:-4px 0 12px;border-radius:8px;overflow:hidden}
+.tline{padding:0;overflow:hidden}
 .tline[hidden]{display:none}
-.tlineBtn{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;width:100%;text-align:left;font:inherit;font-size:13.5px;font-weight:600;padding:7px 12px;border:0;cursor:default;background:var(--band);color:var(--ink)}
-.tline.warn .tlineBtn{background:#92400E;color:#fff;cursor:pointer}
-.tlineBtn .arrow{margin-left:auto;flex:none;font-size:12.5px;font-weight:700;background:#fff;color:#92400E;border-radius:6px;padding:4px 9px;white-space:nowrap}
-.tdetail{background:#FFFBEB;color:#16201B;border:1px solid #D6A15E;border-top:0;border-radius:0 0 8px 8px;padding:8px 12px;font-size:13.5px;line-height:1.4}
+.trow{display:flex;align-items:center;gap:10px;padding:7px 8px 7px 14px;min-height:44px}
+.tlineBtn{flex:1 1 auto;min-width:0;text-align:left;font:inherit;font-size:14px;font-weight:600;padding:4px 0;border:0;background:none;color:var(--ink-2);cursor:default}
+.tline.warn{background:#92400E;border-color:#92400E}
+.tline.warn .tlineBtn{color:#fff;cursor:pointer}
+.tlineBtn .arrow{font-weight:400;margin-left:4px}
+.detourBtn{flex:none;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:0;background:#fff;color:#92400E;cursor:pointer}
+.detourBtn.back{background:#14423A;color:#fff}
+.detourBtn[hidden]{display:none}
+.detourBtn:disabled{opacity:.7}
+.tdetail{background:#FFFBEB;color:#16201B;padding:10px 14px;font-size:13.5px;line-height:1.4}
 .tdetail[hidden]{display:none}
 .tdetail ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .tdetail b{color:#92400E}
 .tdetail .tmeta{font-size:12px;color:#55635B}
-.tline .tmsg{font-size:12.5px;margin:6px 0 0;color:#92400E}
+.tline .tmsg{font-size:12.5px;margin:0;padding:0 14px 8px;color:var(--ink-2)}
+.tline.warn .tmsg{color:#FDE68A}
 .tline .tmsg:empty{display:none}
-.detourBtn{position:absolute;top:10px;right:10px;z-index:950;font:700 14px system-ui,sans-serif;padding:8px 12px;border-radius:8px;border:2px solid #fff;background:#92400E;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);cursor:pointer}
-.detourBtn.back{background:#14423A}
-.detourBtn[hidden]{display:none}
-.detourBtn:disabled{opacity:.7}
 .chainBox{margin-top:12px}
 .chainBox[hidden]{display:none}
 .chainChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;text-transform:none;letter-spacing:0}
@@ -288,12 +291,16 @@ body.mapOpen{overflow:hidden}
     </form>
   </section>
 
-  <section class="card" id="mapCard">
-    <div class="tline" id="tline" hidden aria-live="polite">
+  <section class="card tline" id="tline" hidden aria-live="polite">
+    <div class="trow">
       <button type="button" class="tlineBtn" id="tlineBtn" aria-expanded="false"></button>
-      <div class="tdetail" id="tdetail" hidden></div>
-      <p class="tmsg" id="tmsg"></p>
+      <button type="button" class="detourBtn" id="detourBtn" hidden>Omkjøring</button>
     </div>
+    <p class="tmsg" id="tmsg"></p>
+    <div class="tdetail" id="tdetail" hidden></div>
+  </section>
+
+  <section class="card" id="mapCard">
     <div class="mapbox">
       <div class="side">
       <div class="legend"><span id="lgRoute"><i class="ln"></i>Kjørerute</span><span id="lgHotel"><i class="dt">H</i>Overnatting</span><span id="lgFuel" hidden><i class="sq">B</i>Bensin</span><span id="lgEv" hidden><i class="dm"><b>E</b></i>Lading</span><span id="lgRest" hidden><i class="rs">R</i>Rasteplass</span><span id="lgSvvrest" hidden><i class="vrs">RV</i>Rasteplass</span><span id="lgSvvmin" hidden><i class="vms" title="Skilt 640.10 Severdighet">⌘</i>Severdighet</span><span id="lg_family" hidden><i class="tg" style="background:#BE185D">F</i>Familie</span><span id="lg_sport" hidden><i class="tg" style="background:#4D7C0F">S</i>Sport</span><span id="lg_culture" hidden><i class="tg" style="background:#7E22CE">K</i>Kultur</span><span id="lg_food" hidden><i class="tg" style="background:#B91C1C">M</i>Mat og drikke</span></div>
@@ -302,7 +309,6 @@ body.mapOpen{overflow:hidden}
       <div id="mapWrap">
         <div class="mapTap" role="button" aria-label="Åpne kartet i full skjerm"></div>
         <button type="button" class="mapBack">‹ Tilbake</button>
-        <button type="button" class="detourBtn" id="detourBtn" hidden>Omkjøring</button>
       <div id="map" role="region" aria-label="Kart over ruta"></div>
       </div>
     </div>
@@ -1759,7 +1765,7 @@ body.mapOpen{overflow:hidden}
     var serious = list.some(function(x){ return trafficSerious(x.it); });
     line.hidden = false; line.classList.toggle("warn", list.length > 0);
     if(list.length){
-      btn.innerHTML = "OBS! Trafikkmeldinger på denne ruta ("+list.length+')<span class="arrow">'+(traffic.open ? "Skjul trafikkmeldinger ▴" : "Vis trafikkmeldinger ▾")+"</span>";
+      btn.innerHTML = "OBS! Trafikkmeldinger på ruten ("+list.length+')<span class="arrow">'+(traffic.open ? "▴" : "▾")+"</span>";
       btn.setAttribute("aria-expanded", traffic.open ? "true" : "false");
       var html = "<ul>";
       list.forEach(function(x){
@@ -1769,14 +1775,14 @@ body.mapOpen{overflow:hidden}
       });
       det.innerHTML = html+"</ul>"; det.hidden = !traffic.open;
     } else {
-      btn.textContent = traffic.alt ? "✓ Omkjøring – ingen hendelser" : "✓ Ingen hendelser";
+      btn.textContent = traffic.alt ? "Omkjøring – ingen trafikkmeldinger på ruten" : "Ingen trafikkmeldinger på ruten";
       btn.setAttribute("aria-expanded","false"); det.hidden = true; det.innerHTML = "";
     }
     $("tmsg").textContent = traffic.msg;
     // the detour choice on the map
     dt.hidden = !(traffic.alt || serious);
     dt.classList.toggle("back", traffic.alt);
-    dt.textContent = traffic.busy ? "Leter …" : traffic.alt ? "Vanlig rute" : "Omkjøring";
+    dt.textContent = traffic.busy ? "Leter …" : traffic.alt ? "Vanlig rute" : "Anbefalt omkjøring";
     dt.disabled = traffic.busy;
   }
   // Ask the router for other ways and take the shortest one that stays at least 1 km away from the trouble
